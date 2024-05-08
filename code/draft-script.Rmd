@@ -1,0 +1,529 @@
+---
+title: "Untitled"
+author: "Emily Zhou"
+date: "2023-11-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load packages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(sf)
+library(RSocrata)
+library(viridis)
+library(spatstat.explore)
+library(raster)
+library(spdep)
+library(FNN)
+library(grid)
+library(gridExtra)
+library(knitr)
+library(kableExtra)
+library(tidycensus)
+library(classInt)   
+library(svDialogs)
+library(patchwork)
+library(tidycensus)
+library(SpatialAcc)
+library(tmap)
+census_api_key("e579639b59d671db18f7968d4fd8c0228da09e71")
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+```
+
+# Prepare Analysis Layer
+
+```{r philly fishnet, message=FALSE, warning=FALSE}
+
+philly <- st_read("/Users/emzhou/Desktop/sc-final-proj/City_Limits/City_Limits.shp") %>% st_transform('ESRI:102728')
+fishnet <- 
+  st_make_grid(philly,
+               cellsize = 1640, # 500 meters
+               square = TRUE) %>%
+  .[philly] %>%            # fast way to select intersecting polygons
+  st_sf() %>%
+  mutate(uniqueID = 1:n())
+```
+
+
+```{r remove water, message=FALSE, warning=FALSE}
+
+water <- st_read("/Users/emzhou/Desktop/sc-final-proj/Hydrographic_Features_Poly-shp (1)/dissovled.shp") %>% st_transform('ESRI:102728')
+inWater <- water %>% 
+  st_buffer(dist = 330) %>% 
+  st_intersection(st_centroid(fishnet), .) %>% 
+  st_drop_geometry() %>% 
+  dplyr::select(uniqueID) 
+
+fishnet_nowater<- fishnet %>%
+  filter(!(uniqueID %in% inWater$uniqueID))
+```
+
+
+```{r grids to analysis}
+
+ggplot() +
+  geom_sf(data=fishnet, color="black", fill="blue") +
+  geom_sf(data=fishnet_nowater, color="black", fill="white") +
+  labs(title = "Fishnet of Philly") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, linewidth=0.8)
+        )
+```
+
+# Load Criteria
+
+```{r population density and driving pop}
+
+net_centroid <- st_centroid(fishnet_nowater)
+acs_variable_list.2020 <- load_variables(2020, #year
+                                         "acs5", #five year ACS estimates
+                                        cache = TRUE)
+
+options(timeout=1000) 
+philly20 <- get_acs(geography = "tract", 
+          variables = c(
+            "B01001_001E", # total population
+            "B01001_010E", # male 22-24
+            "B01001_011E",
+            "B01001_012E",
+            "B01001_013E",
+            "B01001_014E",
+            "B01001_015E",
+            "B01001_016E",
+            "B01001_017E",
+            "B01001_018E",
+            "B01001_019E", # male 62-64
+            "B01001_034E",
+            "B01001_035E",
+            "B01001_036E",
+            "B01001_037E",
+            "B01001_038E",
+            "B01001_039E",
+            "B01001_040E",
+            "B01001_041E",
+            "B01001_042E",
+            "B01001_043E" #female 62-64
+            ), 
+          year=2020, state="PA", county="Philadelphia", 
+          geometry=TRUE, output="wide") %>%
+  st_transform('ESRI:102728')
+
+
+philly20 <- philly20 %>% 
+  mutate(popden = B01001_001E / (st_area(geometry)*9.2903e-8),
+         density = as.integer(gsub("\\[.*\\]", "", popden)),
+         pop22_64 = B01001_010E + B01001_011E + B01001_012E+ B01001_013E+ B01001_014E+ B01001_015E+ B01001_016E+ B01001_017E+ B01001_018E+ B01001_019E + B01001_034E + B01001_035E + B01001_036E + B01001_037E + B01001_038E + B01001_039E + B01001_040E + B01001_041E + B01001_042E + B01001_043E,
+         driving_pop = pop22_64 / B01001_001E,
+         totalpop = B01001_001E) %>% 
+  dplyr::select(GEOID, totalpop, density, driving_pop)
+
+philly20$driving_pop[is.nan(philly20$driving_pop)] <- 0
+
+
+```
+
+
+```{r existing EVSE}
+
+evse <- read.csv("/Users/emzhou/Desktop/sc-final-proj/alt_fuel_stations (Nov 21 2023).csv")
+evse <- evse %>% 
+  filter(City == "Philadelphia") %>% 
+  dplyr::select(Latitude, Longitude, EV.Level2.EVSE.Num) %>% 
+  filter(is.na(Latitude) == FALSE & is.na(Longitude) == FALSE) %>% 
+  st_as_sf(., coords = c("Longitude", "Latitude"), crs = 4326) %>% 
+  st_transform('ESRI:102728') %>% 
+  mutate(num = ifelse(is.na(EV.Level2.EVSE.Num), 1, EV.Level2.EVSE.Num))
+
+fishnet_nowater <- fishnet_nowater %>%
+  left_join(net_centroid %>% 
+              mutate(evse.nn = nn_function(st_coordinates(net_centroid), 
+                                           st_coordinates(evse), 2)*0.3048) %>% 
+              st_drop_geometry(), 
+            by = "uniqueID")
+
+```
+
+
+```{r spatial accessibility}
+
+tracts.coords <- st_coordinates(st_centroid(philly20))
+evse.coords <- st_coordinates(evse)
+dist.matrix <- distance(tracts.coords, evse.coords, type = "euclidean")
+
+TSFCA <- ac(p = philly20$totalpop, 
+           n = evse$num, 
+           D = dist.matrix, d0 = 2000, family = "2SFCA")
+
+philly20 <- philly20 %>% 
+  mutate(TSFCA = TSFCA)
+
+fishnet_nowater <- fishnet_nowater %>%
+  left_join(net_centroid %>% st_intersection(philly20) %>% st_drop_geometry(), by = "uniqueID")
+
+```
+
+
+
+```{r map accessibility}
+
+tm_shape(philly20, unit = "ft") +
+  tm_polygons(col = "TSFCA", style = "jenks",palette = "viridis", 
+              border.alpha = 0, title = "2SFCA") +
+    tm_layout(main.title = "Spatial Accessibility of EVSE in Philadelphia County",
+            main.title.size = 0.95, frame = FALSE,
+            legend.outside = TRUE, legend.outside.position = "right") + 
+   tm_credits("Using Two-Step Floating Catchment Area (2000ft) Calculation",
+             position = c("RIGHT", "BOTTOM"), size = 0.5)
+
+#tmap_save(filename = "accessibility_by_tract.png")
+```
+
+
+https://afdc.energy.gov/fuels/electricity_locations.html#/analyze?fuel=ELEC&region=US-PA
+
+
+```{r registered EV}
+  
+                               
+reg_ev <- st_read("/Users/emzhou/Desktop/sc-final-proj/zip-fueltype-bin-shp/zip-fueltype-bin.shp")
+
+Zip_Code <- as.character(c(
+  19120, 19124, 19111, 19143, 19149, 19134, 19140, 19148, 19104, 19144,
+  19145, 19131, 19139, 19146, 19147, 19115, 19136, 19128, 19135, 19121,
+  19154, 19141, 19132, 19152, 19114, 19116, 19151, 19138, 19142, 19119,
+  19130, 19125, 19133, 19103, 19150, 19122, 19126, 19123, 19107, 19106,
+  19153, 19129, 19118, 19137, 19127, 19102, 19108, 19109, 19176, 19112,
+  19160, 19155, 19162, 19161, 19171, 19170, 19173, 19172, 19175, 19178,
+  19177, 19181, 19179, 19183, 19182, 19185, 19184, 19188, 19187, 19192,
+  19191, 19194, 19193, 19196, 19195, 19244, 19197, 19255, 19019, 19093,
+  19092, 19101, 19099, 19105, 19110, 19190
+))
+
+reg_ev <- reg_ev %>% 
+  filter(zip %in% Zip_Code) %>% 
+  dplyr::select(elec_cnt) %>% 
+  st_transform('ESRI:102728')
+
+fishnet_nowater <- fishnet_nowater %>%
+  left_join(net_centroid %>% st_intersection(reg_ev) %>% st_drop_geometry(), by = "uniqueID")
+
+```
+
+```{r map registered EV}
+
+tm_shape(reg_ev, unit = "ft") +
+  tm_polygons(col = "elec_cnt", style = "jenks",palette = "viridis", 
+              border.alpha = 0, title = "EV") +
+    tm_layout(main.title = "Registered EV by Zip Code in Philadelphia County",
+            main.title.size = 0.95, frame = FALSE,
+            legend.outside = TRUE, legend.outside.position = "right")
+
+#tmap_save(filename = "reg_ev_zip.png")
+```
+
+
+
+```{r parking lots}
+
+parking <- st_read("/Users/emzhou/Desktop/sc-final-proj/osm_featers/parking.geojson")
+
+parking <- parking %>% 
+  filter(!access %in% c("no", "permissive", "permit", "private")) %>% 
+  st_transform('ESRI:102728')
+
+fishnet_nowater <- fishnet_nowater %>%
+  left_join(net_centroid %>% 
+              mutate(parking.nn = nn_function(st_coordinates(net_centroid), 
+                                           st_coordinates(parking), 2)*0.3048) %>% 
+              st_drop_geometry(), 
+            by = "uniqueID")
+
+```
+
+
+```{r add police and fire stations}
+
+police_fire <- st_read("/Users/emzhou/Desktop/sc-final-proj/osm_featers/police_fire.geojson") %>% st_transform('ESRI:102728') %>% st_centroid()
+  
+
+fishnet_nowater <- fishnet_nowater %>%
+  left_join(net_centroid %>% 
+              mutate(policefire.nn = nn_function(st_coordinates(net_centroid), 
+                                           st_coordinates(police_fire), 1)*0.3048) %>% 
+              st_drop_geometry(), 
+            by = "uniqueID") 
+```
+
+```{r add zoning rules}
+
+zoning <- st_read("/Users/emzhou/Desktop/sc-final-proj/osm_featers/zoning.geojson")
+
+zoning <- zoning %>% st_transform('ESRI:102728') 
+
+fishnet_nowater <- fishnet_nowater %>%
+  left_join(net_centroid %>% st_buffer(dist = 100) %>% st_intersection(zoning) %>% st_drop_geometry(), by = "uniqueID")
+```
+
+```{r}
+
+tst <-  fishnet_nowater %>% 
+  #filter(is.na(GEOID) == FALSE) %>% 
+  mutate(zoning = case_when( ZONINGGROU == "Commercial/Commercial Mixed-Use" ~ "Commercial",
+                             ZONINGGROU == "Industrial/Industrial Mixed-Use" ~ "Industrial",
+                             ZONINGGROU == "Residential/Residential Mixed-Use" ~ "Residential",
+                             ZONINGGROU == "Special Purpose" ~ "Special",
+                             TRUE ~ "Undefined")) %>% 
+  mutate(zone_score = case_when( zoning == "Commercial" ~ 0.4,
+                             zoning == "Industrial" ~ 0.15,
+                             zoning == "Residential" ~ 0.3,
+                             TRUE ~ 0.15)) %>% 
+  mutate(elec_cnt = ifelse(is.na(elec_cnt), 0, elec_cnt)) %>% 
+  dplyr::select(-featCount, -ZONINGGROU) %>% 
+  mutate(TSFCA = ifelse(is.infinite(TSFCA), 0, TSFCA))
+
+```
+
+
+# Determine Weight (AHP)
+
+## Pairwise comparison matrix
+
+```{r}
+
+pw_df <- data.frame(
+  popden = c(1,8,3,5,5,4,2,2),
+  acc = c(1/8, 1, 1/4, 1/3, 1/4, 1/5, 1/2, 1/2),
+  driving = c(1/3, 4, 1, 1/2, 1/5, 1/2, 1/4, 1/4),
+  evse = c(1/5, 3,2,1, 1/2, 1/4, 1/5, 1/5),
+  reg_ev = c(1/5, 4, 5, 2, 1, 1/5, 1/5, 1/5),
+  parking = c(1/4, 5, 2, 4, 5, 1, 1/3, 1/4),
+  police = c(1/2, 2, 4, 5, 5, 3, 1, 1/2),
+  zoning = c(1/2, 2, 4, 5, 5, 4, 2, 1),
+ row.names = c("popden", "acc", "driving", "evse", "reg_ev", "parking", "police", "zoning")
+)
+
+
+pw_df <- pw_df %>% 
+  mutate(unweight = (popden * acc * driving * evse * reg_ev * parking * police * zoning)^0.125) %>% 
+  mutate(weighted = unweight / sum(unweight))
+  
+```
+
+
+
+```{r}
+
+pw_df_2 <- data.frame(
+  popden = c(1, 7, 5, 3, 2),
+  acc = c(1/7, 1, 1/2, 1/3, 1/5),
+  reg_ev = c(1/5, 2, 1, 1/5, 1/3),
+  parking = c(1/3, 3, 5, 1, 1/3),
+  zoning = c(1/2, 5, 3, 3, 1),
+  row.names = c("popden", "acc", "reg_ev", "parking", "zoning")
+)
+
+
+pw_df_2 <- pw_df_2 %>% 
+  mutate(unweight = (popden * acc * reg_ev * parking * zoning)^0.2) %>% 
+  mutate(weighted = unweight / sum(unweight))
+
+```
+
+
+## Consistency Check
+
+```{r}
+
+A1 <- pw_df_2%>% 
+  dplyr::select(-c(unweight, weighted)) %>% 
+  as.matrix(rownames.force = NA)
+
+A2 <- pw_df_2 %>% 
+  dplyr::select( weighted) %>% 
+  as.matrix()
+
+A3 <- A1 %*%  A2
+
+A4 <- A3 / A2
+A4 <- as.data.frame(A4)
+
+((mean(A4$weighted) - 5) / 4) / 1.11
+```
+
+
+## Weighted sum method
+
+
+## TOPSIS method
+
+
+
+
+```{r scale}
+
+scale_values <- function(x){(x-min(x))/(max(x)-min(x))}
+
+tst <- tst %>% 
+  mutate(scl_density = scale_values(density),
+         scl_acc = scale_values(TSFCA),
+         scl_drivingpop = scale_values(driving_pop),
+         scl_evse = scale_values(evse.nn),
+         scl_elec = scale_values(elec_cnt),
+         scl_parking = scale_values(parking.nn),
+         scl_policefire = scale_values(policefire.nn)
+         ) %>% # now inverse some scales
+  mutate(scl_evse_re = 0 - scl_evse + 1,
+         scl_acc_re = 0 - scl_acc + 1, 
+         scl_parking_re = 0 - scl_parking + 1,
+         scl_policefire_re = 0 - scl_policefire + 1)
+  
+
+```
+
+
+```{r}
+
+tst <- tst %>% 
+  mutate(score = 0.15*scl_density + 0.2*scl_evse_re + 0.2*scl_elec + 0.1*scl_drivingpop + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.15*scl_acc_re)
+
+
+```
+
+
+```{r}
+
+neighborhood <- st_read("/Users/emzhou/Documents/Fall2023/CPLN-501-Quant/PhillyPlanning_Neighborhoods/PhillyPlanning_Neighborhoods.shp") %>% st_transform('ESRI:102728') 
+
+
+tst <- tst %>%
+  left_join(net_centroid %>% 
+               st_intersection(neighborhood %>% dplyr::select(NAME)) %>% 
+              st_drop_geometry(), by = "uniqueID") %>% 
+  mutate(NAME = ifelse(is.na(NAME), "NOT APPLICABLE", NAME))
+
+```
+
+
+```{r}
+
+output_file <- paste0("fishnet", ".shp")
+st_write(fishnet, output_file, append = FALSE)
+
+
+output_file2 <- paste0("accessibility", ".shp")
+st_write(tst, output_file2, append = FALSE)
+
+```
+
+
+```{r}
+ggplot()+
+  geom_sf(data=fishnet, color="black", fill="white") +
+  geom_sf(data=tst, color="black", aes(fill=score))
+```
+
+
+```{r}
+
+library(leaflet)
+summary(tst$score)
+
+```
+
+```{r}
+
+acme <- read.csv("/Users/emzhou/Desktop/sc-final-proj/acme.csv") %>% 
+  st_as_sf(., coords = c("Longitude", "Latitude"), crs = 4326) %>% 
+  mutate(longitude= unlist(map(geometry, 1)),
+         latitude = unlist(map(geometry, 2)))
+  
+  
+```
+
+
+
+```{r}
+
+pal <- colorBin(palette = "viridis", # change the color palette here
+                domain = tst$score, # change the parameter name after $
+                bins = c(0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)) # change the bins here 
+
+```
+
+
+```{r}
+
+labs <- paste0("<strong>", tst$NAME,
+               "</strong><br/>EVSE Suitability: ", tst$score, 
+               "</strong><br/>Population Density (sqkm): ", tst$density,
+               "</strong><br/>Accessibility Score: ", tst$TSFCA,
+               "</strong><br/>Driving Population %: ", tst$driving_pop,
+               "</strong><br/> Registered EV: ", tst$elec_cnt,
+               "</strong><br/>Avg Distance to EVSE: ", tst$evse.nn,
+               "</strong><br/>Avg Distance to Parking: ", tst$parking.nn,
+               "</strong><br/>Avg Distance to Police & Fire: ", tst$evse.nn
+               ) 
+
+labs_acme <- paste0("</strong><br/>ACME Address ", acme$Address)
+```
+
+
+
+```{r show map}
+
+leaflet <- tst %>%
+  st_transform("EPSG:4326") %>% 
+  leaflet() %>%
+  setView(lng = -75.1652, lat = 40.0126, zoom = 10.5) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(weight = 1,
+              fillColor = ~pal(score), # change the name of the parameter in the bracket
+              popup = labs,
+              fillOpacity = 1) %>%
+  addCircleMarkers(
+    data = acme,  # Replace with your actual point data
+    lng = ~longitude,  # Replace with the appropriate variable in your point dataset for longitude
+    lat = ~latitude,  # Replace with the appropriate variable in your point dataset for latitude
+    weight = 0.5,
+    radius = 4,
+    fillColor = "red",  # Set the fill color for the markers
+    fillOpacity = 1,
+    popup = ~labs_acme  # Replace with the appropriate variable in your point dataset for popup text
+  ) %>% 
+  addLegend(position = "bottomright",
+            pal = pal,
+            values = ~score, # change the name of the parameter after ~
+            title = "EVSE Suitability Score") # change the name of the legend 
+
+leaflet
+```
+
+
+
+
+
+```{r}
+
+mapshot(leaflet, url = "evse-suitability.html")
+
+```
+
+	Population density	Spatial accessibility	Registered EV	Distance to Parking	zoning
+Population density	1	1/7	1/5	1/3	1/2
+Spatial accessibility	7	1	2	3	5
+Registered EV	5	1/2	1	5	3
+Distance to Parking	3	1/3	1/5	1	3
+zoning	2	1/5	1/3	1/3	1
+
+
