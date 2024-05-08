@@ -30,20 +30,27 @@ library(patchwork)
 library(tidycensus)
 library(SpatialAcc)
 library(tmap)
-census_api_key("e579639b59d671db18f7968d4fd8c0228da09e71")
+library(here)
+library(svDialogs)
 source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+```
+
+
+```{r}
+census_api_key(dlgInput("Enter a Census API Key", 
+  Sys.getenv("CENSUS_API_KEY"))$res,
+  overwrite = TRUE)
 ```
 
 # Prepare Analysis Layer
 
 ```{r philly fishnet, message=FALSE, warning=FALSE}
 
-philly <- st_read("/Users/emzhou/Desktop/sc-final-proj/City_Limits/City_Limits.shp") %>% st_transform('ESRI:102728')
-fishnet <- 
-  st_make_grid(philly,
+philly <- st_read(here("data", "raw", "city_boundary.geojson")) %>% st_transform('ESRI:102728')
+fishnet <- st_make_grid(philly,
                cellsize = 1640, # 500 meters
                square = TRUE) %>%
-  .[philly] %>%            # fast way to select intersecting polygons
+  .[philly] %>%           
   st_sf() %>%
   mutate(uniqueID = 1:n())
 ```
@@ -51,7 +58,7 @@ fishnet <-
 
 ```{r remove water, message=FALSE, warning=FALSE}
 
-water <- st_read("/Users/emzhou/Desktop/sc-final-proj/Hydrographic_Features_Poly-shp (1)/dissovled.shp") %>% st_transform('ESRI:102728')
+water <- st_read(here("data", "raw", "water_features.geojson")) %>% st_transform('ESRI:102728')
 inWater <- water %>% 
   st_buffer(dist = 330) %>% 
   st_intersection(st_centroid(fishnet), .) %>% 
@@ -136,7 +143,7 @@ philly20$driving_pop[is.nan(philly20$driving_pop)] <- 0
 
 ```{r existing EVSE}
 
-evse <- read.csv("/Users/emzhou/Desktop/sc-final-proj/alt_fuel_stations (Nov 21 2023).csv")
+evse <- read.csv(here("data", "raw", "existing_evse.csv"))
 evse <- evse %>% 
   filter(City == "Philadelphia") %>% 
   dplyr::select(Latitude, Longitude, EV.Level2.EVSE.Num) %>% 
@@ -196,7 +203,7 @@ https://afdc.energy.gov/fuels/electricity_locations.html#/analyze?fuel=ELEC&regi
 ```{r registered EV}
   
                                
-reg_ev <- st_read("/Users/emzhou/Desktop/sc-final-proj/zip-fueltype-bin-shp/zip-fueltype-bin.shp")
+reg_ev <- st_read(here("data", "raw", "reg_ev.geojson"))
 
 Zip_Code <- as.character(c(
   19120, 19124, 19111, 19143, 19149, 19134, 19140, 19148, 19104, 19144,
@@ -236,7 +243,7 @@ tm_shape(reg_ev, unit = "ft") +
 
 ```{r parking lots}
 
-parking <- st_read("/Users/emzhou/Desktop/sc-final-proj/osm_featers/parking.geojson")
+parking <- st_read(here("data", "raw", "osm_features", "parking.geojson"))
 
 parking <- parking %>% 
   filter(!access %in% c("no", "permissive", "permit", "private")) %>% 
@@ -254,7 +261,7 @@ fishnet_nowater <- fishnet_nowater %>%
 
 ```{r add police and fire stations}
 
-police_fire <- st_read("/Users/emzhou/Desktop/sc-final-proj/osm_featers/police_fire.geojson") %>% st_transform('ESRI:102728') %>% st_centroid()
+police_fire <- st_read(here("data", "raw", "osm_features", "police_fire.geojson")) %>% st_transform('ESRI:102728') %>% st_centroid()
   
 
 fishnet_nowater <- fishnet_nowater %>%
@@ -267,7 +274,7 @@ fishnet_nowater <- fishnet_nowater %>%
 
 ```{r add zoning rules}
 
-zoning <- st_read("/Users/emzhou/Desktop/sc-final-proj/osm_featers/zoning.geojson")
+zoning <- st_read(here("data", "raw", "osm_features", "zoning.shp"))
 
 zoning <- zoning %>% st_transform('ESRI:102728') 
 
