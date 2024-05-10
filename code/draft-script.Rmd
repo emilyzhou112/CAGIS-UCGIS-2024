@@ -321,7 +321,7 @@ pw_df <- data.frame(
 )
 
 
-pw_df <- pw_df %>% 
+pw_df <- pw_df %>% # using the geometric mean method
   mutate(unweight = (popden * acc * driving * evse * reg_ev * parking * police * zoning)^0.125) %>% 
   mutate(weighted = unweight / sum(unweight))
   
