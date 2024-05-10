@@ -67,6 +67,8 @@ inWater <- water %>%
 
 fishnet_nowater<- fishnet %>%
   filter(!(uniqueID %in% inWater$uniqueID))
+
+
 ```
 
 
@@ -301,8 +303,6 @@ tst <-  fishnet_nowater %>%
 
 ```
 
-
-# Determine Weight (AHP)
 
 ## Pairwise comparison matrix
 
