@@ -244,7 +244,8 @@ fishnet_nowater <- fishnet_nowater %>%
               st_intersection(zoning) %>% 
               st_drop_geometry(), by = "uniqueID") %>% 
   mutate(TSFCA = ifelse(is.infinite(TSFCA), 0, TSFCA)) %>% 
-  mutate(elec_cnt = ifelse(is.na(elec_cnt), 0, elec_cnt)) 
+  mutate(elec_cnt = ifelse(is.na(elec_cnt), 0, elec_cnt)) %>% 
+  filter(is.na(GEOID) == FALSE)
   
     
 ```
@@ -256,7 +257,6 @@ fishnet_nowater <- fishnet_nowater %>%
 
 scale_values <- function(x){(x-min(x))/(max(x)-min(x))}
 WSM <- fishnet_nowater %>% 
-  filter(is.na(GEOID) == FALSE) %>% 
   mutate(scl_density = scale_values(density),
          scl_acc = scale_values(TSFCA),
          scl_drivingpop = scale_values(driving_pop),
