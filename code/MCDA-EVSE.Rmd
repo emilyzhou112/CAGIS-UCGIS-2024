@@ -302,11 +302,30 @@ rownames(performanceTable) <- uniqueIDs
 
 
 ```{r}
+# reverse is min
+weights <- c(0.2, 0.15, 0.1, 0.15, 0.2, 0.1, 0.05, 0.05)
+criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max")
+overall1 <- TOPSIS(performanceTable, weights, criteriaMinMax)
+TOPSIS <- data.frame(uniqueID = names(overall1), values = overall1) %>%  
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  
+TOPSIS_toplot <- fishnet_nowater %>% 
+  left_join(TOPSIS, by = "uniqueID")
 
 ```
 
 
+```{r}
+
+ggplot()+
+  geom_sf(data=fishnet, color="black", fill="white") +
+  geom_sf(data=TOPSIS_toplot, color="black", aes(fill=values))
+
+```
 
 
+```{r}
+summary(TOPSIS$values)
+```
 
 
