@@ -27,6 +27,9 @@ package.check <- lapply(
   }
 )
 
+# load functions
+source(here("code", "KNN.R"))
+
 # save the R processing environment
 writeLines(
   capture.output(sessionInfo()),
@@ -240,18 +243,25 @@ fishnet_nowater <- fishnet_nowater %>%
                                            st_coordinates(police_fire), 1)*0.3048) %>% # police and fire
               st_drop_geometry(),by = "uniqueID") %>% 
   left_join(net_centroid %>% 
-              st_buffer(dist = 100) %>% 
+              st_buffer(dist = 200) %>% 
               st_intersection(zoning) %>% 
               st_drop_geometry(), by = "uniqueID") %>% 
   mutate(TSFCA = ifelse(is.infinite(TSFCA), 0, TSFCA)) %>% 
   mutate(elec_cnt = ifelse(is.na(elec_cnt), 0, elec_cnt)) %>% 
-  filter(is.na(GEOID) == FALSE)
+  filter(is.na(GEOID) == FALSE) %>% 
+  filter(is.na(zone_score) == FALSE) %>% 
+  dplyr::select(-c(GEOID, totalpop, featCount, ZONINGGROU, zoning)) %>% 
+  group_by(uniqueID) %>% # for duplicate grids, take the mean of the zone score
+  mutate(zone_score = mean(zone_score)) %>%
+  ungroup() %>%
+  distinct(uniqueID, .keep_all = TRUE)
   
     
 ```
+# Multi-Criteria Decision Analysis
 
 
-# Weighted Sum Method
+## Self-Assigned Weight + WSM
 
 ```{r}
 
@@ -269,39 +279,33 @@ WSM <- fishnet_nowater %>%
          scl_acc_re = 0 - scl_acc + 1, 
          scl_parking_re = 0 - scl_parking + 1,
          scl_policefire_re = 0 - scl_policefire + 1) %>% 
-  mutate(score = 0.15*scl_density + 0.2*scl_evse_re + 0.2*scl_elec + 0.1*scl_drivingpop + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.15*scl_acc_re)
+  mutate(score = 0.15*scl_density + 0.2*scl_evse_re + 0.2*scl_elec + 0.1*scl_drivingpop + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.15*scl_acc_re) # self assign weight
 ```
 
 
+```{r}
+ggplot()+
+  geom_sf(data=fishnet, color="black", fill="white") +
+  geom_sf(data=WSM, color="black", aes(fill=score))
+```
 
 
-```{r nearest neighbor function}
+## Self Assigned Weight + TOPSIS
 
-# K Nearest Neighbor Function
-# From Public Policy Analytics Class
+```{r}
 
-nn_function <- function(measureFrom,measureTo,k) {
-  measureFrom_Matrix <-
-    as.matrix(measureFrom)
-  measureTo_Matrix <-
-    as.matrix(measureTo)
-  nn <-   
-    get.knnx(measureTo, measureFrom, k)$nn.dist
-  output <-
-    as.data.frame(nn) %>%
-    rownames_to_column(var = "thisPoint") %>%
-    gather(points, point_distance, V1:ncol(.)) %>%
-    arrange(as.numeric(thisPoint)) %>%
-    group_by(thisPoint) %>%
-    summarize(pointDistance = mean(point_distance)) %>%
-    arrange(as.numeric(thisPoint)) %>% 
-    dplyr::select(-thisPoint) %>%
-    pull()
-  
-  return(output)  
-}
+performanceTable <- fishnet_nowater %>% dplyr::select(-c(uniqueID)) %>% st_drop_geometry()
+uniqueIDs <- fishnet_nowater$uniqueID
+rownames(performanceTable) <- uniqueIDs
 
 ```
+
+
+```{r}
+
+```
+
+
 
 
 
