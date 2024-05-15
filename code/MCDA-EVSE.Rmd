@@ -104,9 +104,6 @@ evse <- evse %>%
 tracts.coords <- st_coordinates(st_centroid(philly20))
 evse.coords <- st_coordinates(evse)
 dist.matrix <- distance(tracts.coords, evse.coords, type = "euclidean")
-TSFCA <- ac(p = philly20$totalpop, 
-            n = evse$num, 
-            D = dist.matrix, d0 = 2000, family = "2SFCA")
 ```
 
 
@@ -160,10 +157,17 @@ philly20 <- philly20 %>%
          driving_pop = pop22_64 / B01001_001E,
          totalpop = B01001_001E) %>%
   dplyr::select(GEOID, totalpop, density, driving_pop) %>%
-  mutate(driving_pop = ifelse(is.nan(driving_pop), 0, driving_pop)) %>% 
-  mutate(TSFCA = TSFCA)  # add spatial accessibility calculation here
+  mutate(driving_pop = ifelse(is.nan(driving_pop), 0, driving_pop))
 
 
+```
+```{r}
+# add TSFCA
+TSFCA <- ac(p = philly20$totalpop, 
+            n = evse$num, 
+            D = dist.matrix, d0 = 2000, family = "2SFCA")
+philly20 <- philly20 %>% 
+  mutate(TSFCA = TSFCA)
 ```
 
 
