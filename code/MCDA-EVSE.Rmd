@@ -305,10 +305,24 @@ ggplot()+
 
 ```{r}
 
-performanceTable <- fishnet_nowater %>% dplyr::select(-c(uniqueID)) %>% st_drop_geometry()
+performanceTable <- fishnet_nowater %>% 
+  dplyr::select(-c(uniqueID)) %>% 
+  st_drop_geometry() %>% 
+  mutate(density = scale_values(density),
+         TSFCA = scale_values(TSFCA),
+         driving_pop = scale_values(driving_pop),
+         evse.nn = scale_values(evse.nn),
+         elec_cnt = scale_values(elec_cnt),
+         parking.nn = scale_values(parking.nn),
+         policefire.nn = scale_values(policefire.nn)
+         )
 uniqueIDs <- fishnet_nowater$uniqueID
 rownames(performanceTable) <- uniqueIDs
+```
 
+
+```{r}
+overall1
 ```
 
 
@@ -318,7 +332,7 @@ weights <- c(0.2, 0.15, 0.1, 0.15, 0.2, 0.1, 0.05, 0.05)
 criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max")
 overall1 <- TOPSIS(performanceTable, weights, criteriaMinMax)
 TOPSIS <- data.frame(uniqueID = names(overall1), values = overall1) %>%  
-  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  mutate(uniqueID = as.integer(uniqueID))
   
 TOPSIS_toplot <- fishnet_nowater %>% 
   left_join(TOPSIS, by = "uniqueID")
@@ -338,5 +352,29 @@ ggplot()+
 ```{r}
 summary(TOPSIS$values)
 ```
+
+## Self Assigned Weights + PROMETHEE
+
+The function returns three matrices: The first one contains the preference relations between the
+alternatives, the second one contains the indifference relations between the alternatives and the
+third one contains the incomparability relations between the alternatives.
+
+```{r}
+
+# performance table: matrix where each row corresponds to an alternative,and each column to a criterion
+# preference function
+# preference threshold
+# indifference threshold
+# gauss parameter
+# criteria weights
+# criteria minmax
+
+
+
+
+```
+
+
+
 
 
