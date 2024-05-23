@@ -322,11 +322,6 @@ rownames(performanceTable) <- uniqueIDs
 
 
 ```{r}
-overall1
-```
-
-
-```{r}
 # reverse is min
 weights <- c(0.2, 0.15, 0.1, 0.15, 0.2, 0.1, 0.05, 0.05)
 criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max")
@@ -355,26 +350,88 @@ summary(TOPSIS$values)
 
 ## Self Assigned Weights + PROMETHEE
 
-The function returns three matrices: The first one contains the preference relations between the
-alternatives, the second one contains the indifference relations between the alternatives and the
-third one contains the incomparability relations between the alternatives.
+Now, this is based solely on quantitative analysis on the distribution of the data. 
+```{r}
+
+IQR(performanceTable$evse.nn) / 3
+IQR(performanceTable$density) / 3
+IQR(performanceTable$driving_pop) /3 
+IQR(performanceTable$TSFCA) / 3 
+IQR(performanceTable$elec_cnt) / 3
+IQR(performanceTable$parking.nn) / 3
+IQR(performanceTable$policefire.nn) / 3
+IQR(performanceTable$zone_score) / 3
+
+```
+```{r}
+range(performanceTable$evse.nn) 
+range(performanceTable$density) / 4
+range(performanceTable$driving_pop) / 4
+range(performanceTable$TSFCA) / 4 
+range(performanceTable$elec_cnt) / 4
+range(performanceTable$parking.nn) / 4
+range(performanceTable$policefire.nn) / 4
+range(performanceTable$zone_score) / 4
+```
+
 
 ```{r}
 
-# performance table: matrix where each row corresponds to an alternative,and each column to a criterion
-# preference function
-# preference threshold
-# indifference threshold
-# gauss parameter
-# criteria weights
-# criteria minmax
+criteriaWeights <- c(0.2, 0.15, 0.1, 0.15, 0.2, 0.1, 0.05, 0.05)
+names(criteriaWeights)<-colnames(performanceTable)
 
+criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max")
+names(criteriaMinMax)<-colnames(performanceTable)
 
+preferenceFunction<-c("Usual","U-shape","V-shape","Level","V-shape-Indiff","Gaussian", "Level","V-shape-Indiff")
+gaussParameter<-c(0.25,1,2,0,0,0,0,0)
+names(gaussParameter)<-colnames(performanceTable)
+
+#Preference threshold
+preferenceThreshold<-c(0.31, 0.21, 0.12, 0, 0.17, 0.19, 0.23, 0.075)
+names(preferenceThreshold)<-colnames(performanceTable)
+
+#Indifference threshold
+indifferenceThreshold<-c(0.1, 0.07, 0.041, 0, 0.058, 0.065, 0.078, 0.025)
+names(indifferenceThreshold)<-colnames(performanceTable)
 
 
 ```
 
 
+```{r}
+performanceTable <- as.matrix(performanceTable)
+```
 
+
+
+```{r}
+
+promethee <- PROMETHEEOutrankingFlows(performanceTable, preferenceFunction,preferenceThreshold,
+indifferenceThreshold,gaussParameter,criteriaWeights,criteriaMinMax)
+```
+
+
+```{r}
+
+
+promethee_df <- data.frame(uniqueID = names(promethee$outrankingFlowsPos), 
+           Pos = unname(promethee$outrankingFlowsPos),
+           Neg = unname(promethee$outrankingFlowsNeg)) %>%  
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  mutate(net = Pos-Neg) %>% 
+  dplyr::select(uniqueID, net)
+
+PROMETHEE_toplot <- fishnet_nowater %>% 
+  left_join(promethee_df, by = "uniqueID")
+  
+```
+
+
+```{r}
+ggplot()+
+  geom_sf(data=fishnet, color="black", fill="white") +
+  geom_sf(data=PROMETHEE_toplot, color="black", aes(fill=net))
+```
 
 

@@ -106,11 +106,27 @@ overall1 # returns a vector containing the TOPSIS score for each alternative
 ```
 
 ## Testing the PROMETHEE Approach
+Uses preference functions and outranking flows to rank alternatives based on pairwise comparisons.
+
+1. Calculate the difference in performance scores for each criterion between all pairs of alternatives.
+2. Set up an indifference threshold.
+3. Set up a preference threshold. 
+4. Decide a preference function
+5. Apply the preference function using the indifference and preference threshold to convert the differences into preference value, which is typically betweeen 0 and 1. 
+6. For each alternative, sum the preference values across all criteria to obtain the aggregated preference indices.
+7. Calculate the positive and negative outranking flows for each alternative, which represent how much an alternative outranks others and is outranked by others, respectively.
+8. Use the net outranking flow (positive flow minus negative flow) to rank the alternatives.
 
 
-The function returns three matrices: The first one contains the preference relations between the
-alternatives, the second one contains the indifference relations between the alternatives and the
-third one contains the incomparability relations between the alternatives.
+The gaussParameter vector in the code specifies the standard deviation (s) for the Gaussian preference function for each criterion.
+
+Terminology: 
+- preference function: define how much better one site is better over another for each criterion (a linear function where the lower the accessibility, the better)
+
+- preference threshold: the minimum difference between the performance of two alternatives on a given criterion such that the decision-maker has a strict preference for one alternative over the other. **If the performance difference is greater than or equal to p, the decision-maker clearly prefers one alternative over the other for that criterion. **
+
+- indifference threshold: The indifference threshold q represents the maximum difference between the performance of two alternatives on a given criterion such that the decision-maker is indifferent between them. **If the performance difference is less than or equal to q, the decision-maker considers the two alternatives to be effectively equal with respect to that criterion.**
+
 
 ```{r}
 
@@ -127,6 +143,9 @@ colnames(performanceTable) <- c("Price","Time","Comfort")
 ```{r}
 # The preference functions
 preferenceFunction<-c("Gaussian","Level","V-shape-Indiff")
+#Parameter of the Gaussian preference function
+gaussParameter<-c(4,1,0)
+names(gaussParameter)<-colnames(performanceTable)
 ```
 
 ```{r}
@@ -139,11 +158,10 @@ names(preferenceThreshold)<-colnames(performanceTable)
 #Indifference threshold
 indifferenceThreshold<-c(3,11,1)
 names(indifferenceThreshold)<-colnames(performanceTable)
+```
 
-#Parameter of the Gaussian preference function
-gaussParameter<-c(4,0,0)
-names(gaussParameter)<-colnames(performanceTable)
 
+```{r}
 #weights
 criteriaWeights<-c(0.2,0.3,0.5)
 names(criteriaWeights)<-colnames(performanceTable)
@@ -151,10 +169,19 @@ names(criteriaWeights)<-colnames(performanceTable)
 # criteria to minimize or maximize
 criteriaMinMax<-c("min","min","max")
 names(criteriaMinMax)<-colnames(performanceTable)
+```
 
+
+```{r}
 PROMETHEEOutrankingFlows(performanceTable, preferenceFunction,preferenceThreshold,
 indifferenceThreshold,gaussParameter,criteriaWeights,criteriaMinMax)
 ```
 
+
+
+
+
+
+## Testing the AHP Approach
 
 
