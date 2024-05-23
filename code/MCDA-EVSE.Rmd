@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r packages and processing environment}
 
 # list of packages required 
-packages = c("tidycensus", "tidyverse", "viridis", "FNN",  "dplyr", "sf", "classInt", "readr", "ggplot2", "here", "tmap", "SpatialAcc", "svDialogs", "MCDA")
+packages = c("tidycensus", "tidyverse", "viridis", "FNN",  "dplyr", "sf", "classInt", "readr", "ggplot2", "here", "tmap", "SpatialAcc", "svDialogs", "MCDA", "nngeo", "leaflet")
 
 # load and install required packages
 package.check <- lapply(
@@ -224,9 +224,55 @@ electricity <- read.csv(here("data", "raw", "property-electricity-data.csv")) %>
   dplyr::select(Y = y_coord, X = x_coord, portfolio_bldg_id, postal_code, primary_property_type, sector, electricity_2021) %>%
   na.omit() %>%
   st_as_sf(coords = c("X", "Y"), crs = 4326, agr = "constant") %>%
-  st_transform('ESRI:102728')
+  st_transform('ESRI:102728') %>% 
+  st_intersection(., fishnet)
 
 ```
+
+
+```{r}
+
+ggplot()+
+  geom_sf(data=fishnet, color="black", fill="white") +
+  geom_sf(data=points_sf %>% st_buffer(dist = 1640), color="black")
+
+```
+
+```{r}
+
+
+temp <- st_join(net_centroid, electricity %>% 
+                  st_buffer(dist = 1640)) %>% 
+  group_by(uniqueID.x) %>% 
+  summarize(elect_use = mean(electricity_2021))
+
+no_elect <- temp %>% 
+  filter(is.na(elect_use)) %>% 
+  mutate(neighbor_index = 1:n())
+  
+nn_indices <- st_nn(no_elect,
+                    electricity, k = 1)
+
+nearest_neighbors <- electricity[unlist(nn_indices), ] %>% mutate(neighbor_index = 1:n())
+no_elect <- no_elect %>% 
+  st_drop_geometry() %>% 
+  left_join(nearest_neighbors %>% select(electricity_2021, neighbor_index), 
+            by = c("neighbor_index" = "neighbor_index"))
+
+temp <- temp %>% 
+  left_join(., no_elect %>% 
+              dplyr::select(uniqueID.x, electricity_2021), by = c("uniqueID.x" = "uniqueID.x")) %>% 
+  mutate(elect_use = case_when(
+    is.na(elect_use) ~ electricity_2021,
+    TRUE ~ elect_use
+  )) %>% 
+  dplyr::select(-electricity_2021)
+
+
+
+
+```
+
 
 
 # Aggregate Criteria
@@ -269,6 +315,7 @@ fishnet_nowater <- fishnet_nowater %>%
   
     
 ```
+
 # Multi-Criteria Decision Analysis
 
 
