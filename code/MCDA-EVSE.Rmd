@@ -83,23 +83,6 @@ ggplot() +
 
 # Criteria Processing 
 
-## Existing EVSE Distribution and Access
-
-```{r load existing evse}
-
-evse <- read.csv(here("data", "raw", "existing_evse.csv"))
-evse <- evse %>% 
-  filter(City == "Philadelphia") %>% 
-  dplyr::select(Latitude, Longitude, EV.Level2.EVSE.Num) %>% 
-  filter(is.na(Latitude) == FALSE & is.na(Longitude) == FALSE) %>% 
-  st_as_sf(., coords = c("Longitude", "Latitude"), crs = 4326) %>% 
-  st_transform('ESRI:102728') %>% 
-  mutate(num = ifelse(is.na(EV.Level2.EVSE.Num), 1, EV.Level2.EVSE.Num))
-
-```
-
-
-
 ## Demographic Information and EV Ownership
 
 ```{r load demographic info}
@@ -155,22 +138,6 @@ philly20 <- philly20 %>%
 
 ```
 
-```{r compute spatial accessibility}
-
-tracts.coords <- st_coordinates(st_centroid(philly20))
-evse.coords <- st_coordinates(evse)
-dist.matrix <- distance(tracts.coords, evse.coords, type = "euclidean")
-```
-
-```{r}
-# add TSFCA
-TSFCA <- ac(p = philly20$totalpop, 
-            n = evse$num, 
-            D = dist.matrix, d0 = 2000, family = "2SFCA")
-philly20 <- philly20 %>% 
-  mutate(TSFCA = TSFCA)
-```
-
 
 ```{r load registered ev}
 
@@ -192,6 +159,38 @@ reg_ev <- reg_ev %>%
   st_transform('ESRI:102728')
 
 ```
+
+
+
+## Existing EVSE Distribution and Access
+
+```{r load existing evse}
+
+evse <- read.csv(here("data", "raw", "existing_evse.csv"))
+evse <- evse %>% 
+  filter(City == "Philadelphia") %>% 
+  dplyr::select(Latitude, Longitude, EV.Level2.EVSE.Num) %>% 
+  filter(is.na(Latitude) == FALSE & is.na(Longitude) == FALSE) %>% 
+  st_as_sf(., coords = c("Longitude", "Latitude"), crs = 4326) %>% 
+  st_transform('ESRI:102728') %>% 
+  mutate(num = ifelse(is.na(EV.Level2.EVSE.Num), 1, EV.Level2.EVSE.Num))
+
+```
+
+
+```{r compute spatial accessibility}
+
+tracts.coords <- st_coordinates(st_centroid(philly20))
+evse.coords <- st_coordinates(evse)
+dist.matrix <- distance(tracts.coords, evse.coords, type = "euclidean")
+
+TSFCA <- ac(p = philly20$totalpop, 
+            n = evse$num, 
+            D = dist.matrix, d0 = 2000, family = "2SFCA")
+philly20 <- philly20 %>% 
+  mutate(TSFCA = TSFCA)
+```
+
 
 ## Other Considerations
 
@@ -225,54 +224,9 @@ electricity <- read.csv(here("data", "raw", "property-electricity-data.csv")) %>
   na.omit() %>%
   st_as_sf(coords = c("X", "Y"), crs = 4326, agr = "constant") %>%
   st_transform('ESRI:102728') %>% 
-  st_intersection(., fishnet)
+  st_intersection(., fishnet) # clip to fishnet extent
 
 ```
-
-
-```{r}
-
-ggplot()+
-  geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=points_sf %>% st_buffer(dist = 1640), color="black")
-
-```
-
-```{r}
-
-
-temp <- st_join(net_centroid, electricity %>% 
-                  st_buffer(dist = 1640)) %>% 
-  group_by(uniqueID.x) %>% 
-  summarize(elect_use = mean(electricity_2021))
-
-no_elect <- temp %>% 
-  filter(is.na(elect_use)) %>% 
-  mutate(neighbor_index = 1:n())
-  
-nn_indices <- st_nn(no_elect,
-                    electricity, k = 1)
-
-nearest_neighbors <- electricity[unlist(nn_indices), ] %>% mutate(neighbor_index = 1:n())
-no_elect <- no_elect %>% 
-  st_drop_geometry() %>% 
-  left_join(nearest_neighbors %>% select(electricity_2021, neighbor_index), 
-            by = c("neighbor_index" = "neighbor_index"))
-
-temp <- temp %>% 
-  left_join(., no_elect %>% 
-              dplyr::select(uniqueID.x, electricity_2021), by = c("uniqueID.x" = "uniqueID.x")) %>% 
-  mutate(elect_use = case_when(
-    is.na(elect_use) ~ electricity_2021,
-    TRUE ~ elect_use
-  )) %>% 
-  dplyr::select(-electricity_2021)
-
-
-
-
-```
-
 
 
 # Aggregate Criteria
@@ -316,8 +270,45 @@ fishnet_nowater <- fishnet_nowater %>%
     
 ```
 
-# Multi-Criteria Decision Analysis
 
+```{r aggregate power grid}
+
+elec_grid <- st_join(net_centroid, 
+                electricity %>% st_buffer(dist = 1640)) %>% 
+  group_by(uniqueID.x) %>% 
+  summarize(elect_use = mean(electricity_2021))
+
+unjoin <- elec_grid %>% 
+  filter(is.na(elect_use)) %>% 
+  mutate(neighbor_index = 1:n()) 
+  
+nn_indices <- st_nn(unjoin,
+                    electricity, k = 1)
+nearest_neighbors <- electricity[unlist(nn_indices), ] %>% mutate(neighbor_index = 1:n())
+
+unjoin <- unjoin %>%
+  st_drop_geometry() %>% 
+  left_join(nearest_neighbors %>% select(electricity_2021, neighbor_index), 
+            by = c("neighbor_index" = "neighbor_index"))
+
+elec_grid <- elec_grid %>% 
+  left_join(., unjoin %>% 
+              dplyr::select(uniqueID.x, electricity_2021), by = c("uniqueID.x" = "uniqueID.x")) %>% 
+  mutate(elect_use = case_when(
+    is.na(elect_use) ~ electricity_2021,
+    TRUE ~ elect_use
+  )) %>% 
+  dplyr::select(-electricity_2021) %>% 
+  st_drop_geometry()
+
+fishnet_nowater <- fishnet_nowater %>% 
+  left_join(., elec_grid, by = c("uniqueID" = "uniqueID.x") ) %>% 
+  # filter(uniqueID != 1592,)
+```
+
+
+
+# Multi-Criteria Decision Analysis
 
 ## Self-Assigned Weight + WSM
 
@@ -331,20 +322,25 @@ WSM <- fishnet_nowater %>%
          scl_evse = scale_values(evse.nn),
          scl_elec = scale_values(elec_cnt),
          scl_parking = scale_values(parking.nn),
-         scl_policefire = scale_values(policefire.nn)
+         scl_policefire = scale_values(policefire.nn),
+         scl_elect_use = scale_values(elect_use)
          ) %>% # now inverse some scales
   mutate(scl_evse_re = 0 - scl_evse + 1,
          scl_acc_re = 0 - scl_acc + 1, 
          scl_parking_re = 0 - scl_parking + 1,
          scl_policefire_re = 0 - scl_policefire + 1) %>% 
-  mutate(score = 0.15*scl_density + 0.2*scl_evse_re + 0.2*scl_elec + 0.1*scl_drivingpop + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.15*scl_acc_re) # self assign weight
+  mutate(score = 0.12*scl_density + 0.18*scl_evse_re + 0.15*scl_elec + 0.1*scl_drivingpop + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.12*scl_acc_re +0.13*scl_elect_use) # self assign weight
 ```
 
 
 ```{r}
+
+#quantiles <- classIntervals(WSM$score, n = 8, style = "quantile")
+#WSM$quantile <- cut(WSM$score, breaks = quantiles$brks, include.lowest = TRUE)
+
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=WSM, color="black", aes(fill=score))
+  geom_sf(data=WSM, color="black", aes(fill=score)) #+ scale_fill_brewer(palette = "Blues")
 ```
 
 
@@ -361,18 +357,34 @@ performanceTable <- fishnet_nowater %>%
          evse.nn = scale_values(evse.nn),
          elec_cnt = scale_values(elec_cnt),
          parking.nn = scale_values(parking.nn),
-         policefire.nn = scale_values(policefire.nn)
+         policefire.nn = scale_values(policefire.nn),
+         elect_use = scale_values(elect_use)
          )
 uniqueIDs <- fishnet_nowater$uniqueID
 rownames(performanceTable) <- uniqueIDs
 ```
 
+```{r}
+
+summary(performanceTable$evse.nn)
+summary(performanceTable$density)
+summary(performanceTable$driving_pop) 
+summary(performanceTable$TSFCA) 
+summary(performanceTable$elec_cnt) 
+summary(performanceTable$parking.nn) 
+summary(performanceTable$policefire.nn) 
+summary(performanceTable$zone_score) 
+summary(performanceTable$elect_use) 
+
+```
 
 ```{r}
+
 # reverse is min
-weights <- c(0.2, 0.15, 0.1, 0.15, 0.2, 0.1, 0.05, 0.05)
-criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max")
-overall1 <- TOPSIS(performanceTable, weights, criteriaMinMax)
+weights <- c(0.18, 0.12, 0.1, 0.12, 0.15, 0.1, 0.05, 0.05, 0.13)
+criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max", "max")
+positiveIdealSolutions <- c(0.17, 0.60, 0.70, 0, 0.50, 0.10, 0.14, 0.3,0.007)
+overall1 <- TOPSIS(performanceTable, weights, criteriaMinMax, positiveIdealSolutions)
 TOPSIS <- data.frame(uniqueID = names(overall1), values = overall1) %>%  
   mutate(uniqueID = as.integer(uniqueID))
   
@@ -384,10 +396,12 @@ TOPSIS_toplot <- fishnet_nowater %>%
 
 ```{r}
 
+#quantiles <- classIntervals(TOPSIS_toplot$values, n = 8, style = "quantile")
+#TOPSIS_toplot$quantile <- cut(TOPSIS_toplot$values, breaks = quantiles$brks, include.lowest = TRUE)
+
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=TOPSIS_toplot, color="black", aes(fill=values))
-
+  geom_sf(data=TOPSIS_toplot, color="black", aes(fill=values)) #+ scale_fill_brewer(palette = "Blues")
 ```
 
 
@@ -408,38 +422,28 @@ IQR(performanceTable$elec_cnt) / 3
 IQR(performanceTable$parking.nn) / 3
 IQR(performanceTable$policefire.nn) / 3
 IQR(performanceTable$zone_score) / 3
+IQR(performanceTable$elect_use) / 3
 
 ```
-```{r}
-range(performanceTable$evse.nn) 
-range(performanceTable$density) / 4
-range(performanceTable$driving_pop) / 4
-range(performanceTable$TSFCA) / 4 
-range(performanceTable$elec_cnt) / 4
-range(performanceTable$parking.nn) / 4
-range(performanceTable$policefire.nn) / 4
-range(performanceTable$zone_score) / 4
-```
-
 
 ```{r}
 
-criteriaWeights <- c(0.2, 0.15, 0.1, 0.15, 0.2, 0.1, 0.05, 0.05)
+criteriaWeights <- c(0.18, 0.12, 0.1, 0.12, 0.15, 0.1, 0.05, 0.05, 0.13)
 names(criteriaWeights)<-colnames(performanceTable)
 
-criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max")
+criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max", "max")
 names(criteriaMinMax)<-colnames(performanceTable)
 
-preferenceFunction<-c("Usual","U-shape","V-shape","Level","V-shape-Indiff","Gaussian", "Level","V-shape-Indiff")
-gaussParameter<-c(0.25,1,2,0,0,0,0,0)
+preferenceFunction<-c("Usual","U-shape","V-shape","Level","V-shape-Indiff","Gaussian", "Level","V-shape-Indiff", "Level")
+gaussParameter<-c(0.25,1,2,0,0,0,0,0,0)
 names(gaussParameter)<-colnames(performanceTable)
 
 #Preference threshold
-preferenceThreshold<-c(0.31, 0.21, 0.12, 0, 0.17, 0.19, 0.23, 0.075)
+preferenceThreshold<-c(0.31, 0.21, 0.12, 0, 0.17, 0.19, 0.23, 0.075, 0.005367344)
 names(preferenceThreshold)<-colnames(performanceTable)
 
 #Indifference threshold
-indifferenceThreshold<-c(0.1, 0.07, 0.041, 0, 0.058, 0.065, 0.078, 0.025)
+indifferenceThreshold<-c(0.1, 0.07, 0.041, 0, 0.058, 0.065, 0.078, 0.025, 0.001789115)
 names(indifferenceThreshold)<-colnames(performanceTable)
 
 
@@ -449,7 +453,6 @@ names(indifferenceThreshold)<-colnames(performanceTable)
 ```{r}
 performanceTable <- as.matrix(performanceTable)
 ```
-
 
 
 ```{r}
@@ -476,9 +479,14 @@ PROMETHEE_toplot <- fishnet_nowater %>%
 
 
 ```{r}
+#quantiles <- classIntervals(PROMETHEE_toplot$net, n = 8, style = "quantile")
+#PROMETHEE_toplot$quantile <- cut(PROMETHEE_toplot$net, breaks = quantiles$brks, include.lowest = TRUE)
+
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=PROMETHEE_toplot, color="black", aes(fill=net))
+  geom_sf(data=PROMETHEE_toplot, color="black", aes(fill=net)) #+ scale_fill_brewer(palette = "Blues")
 ```
+
+## AHP + TOPSIS
 
 
