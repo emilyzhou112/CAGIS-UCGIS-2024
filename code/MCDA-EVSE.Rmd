@@ -553,8 +553,6 @@ ggplot()+
   geom_sf(data=AHP_TOPSIS_toplot, color="black", aes(fill=quantile)) + scale_fill_brewer(palette = "RdBu")
 ```
 
-
-
 # Consistency Check 
 
 AHP_TOPSIS, TOPSIS, WSM, PROMETHEE
@@ -580,8 +578,11 @@ rank_compare <- WSM %>%
   left_join(., TOPSIS %>% dplyr::select(uniqueID, topsis_rank), by = "uniqueID") %>% 
   left_join(., PROMETHEE %>% dplyr::select(uniqueID, promethee_rank), by = "uniqueID") %>% 
   left_join(., AHP_TOPSIS %>% dplyr::select(uniqueID, ahptopsis_rank), by = "uniqueID") %>% 
-  mutate(avg_rank = (wsm_rank + topsis_rank + promethee_rank + ahptopsis_rank) / 4)
+  mutate(avg_rank = as.integer((wsm_rank + topsis_rank + promethee_rank + ahptopsis_rank) / 4))
 
+```
+
+```{r}
 rank_toplot <- fishnet_nowater %>% 
   left_join(rank_compare, by = "uniqueID")
 ggplot()+
@@ -589,6 +590,87 @@ ggplot()+
   geom_sf(data=rank_toplot, color="black", aes(fill=avg_rank)) +
   geom_sf(data=acme, color="red")
 ```
+
+## Further Analysis
+
+```{r}
+neighborhood <- st_read(here("data", "raw", "PhillyPlanning_Neighborhoods", "PhillyPlanning_Neighborhoods.shp")) %>% st_transform('ESRI:102728') 
+  
+
+final <- fishnet_nowater %>% 
+  left_join(., rank_compare, by = "uniqueID") %>% 
+  left_join(net_centroid %>% 
+               st_intersection(neighborhood %>% dplyr::select(NAME)) %>% 
+              st_drop_geometry(), by = "uniqueID") %>% 
+  mutate(NAME = ifelse(is.na(NAME), "NOT APPLICABLE", NAME))
+  
+```
+
+
+```{r}
+
+final %>% 
+  st_drop_geometry() %>% 
+  group_by(NAME) %>% 
+  summarize(overall_rank = mean(avg_rank)) %>% 
+  left_join(neighborhood, .,by = "NAME") %>% 
+  ggplot()+
+  geom_sf(color="black", aes(fill=overall_rank))
+  
+```
+
+
+```{r}
+
+# if negative, it means that wsm over-rank topsis or promethee
+# if positive, it means that wsm under-rank topsis or promethee
+compare<- final %>% 
+  mutate(wsm_topsis = wsm_rank - topsis_rank,
+         wsm_promethee = wsm_rank - promethee_rank,
+         topsis_promethee = topsis_rank - promethee_rank) %>% 
+  mutate(compare_weight = topsis_rank - ahptopsis_rank)
+
+compare %>% 
+  st_drop_geometry() %>% 
+  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, topsis_promethee, compare_weight, NAME)) %>% 
+  pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "topsis_promethee", "compare_weight"),  
+               names_to = "variable",        # Name for the new 'variable' column
+               values_to = "value") %>% 
+  ggplot(aes(x = value)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of Differences Between Different Methods",
+       x = "Difference",
+       y = "Frequency") +
+  theme_minimal() +
+  facet_wrap(~ variable)
+  
+
+```
+
+
+```{r fig.height=14, fig.width=12}
+
+compare %>% 
+  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, topsis_promethee, compare_weight, NAME)) %>% 
+  pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "topsis_promethee", "compare_weight"),  
+               names_to = "variable",        # Name for the new 'variable' column
+               values_to = "value") %>% 
+  ggplot() +
+  geom_sf(aes(fill = value), color = "black") +
+  scale_fill_distiller(palette = "RdBu", direction = 1, 
+                       name = "Sample Variable", 
+                       na.value = "grey50") +
+  labs(title = "Map with Divergent Color Ramp") +
+  theme_minimal() +
+  facet_wrap(~ variable)
+  
+
+
+
+```
+
+
+
 
 # Public Private Partnership
 
@@ -604,31 +686,23 @@ acme <- read.csv(here("data", "raw", "acme.csv")) %>%
 
 ```{r}
 
-final <- fishnet_nowater %>% 
-  left_join(., rank_compare, by = "uniqueID")
 
-
-pal <- colorBin(palette = "viridis", # change the color palette here
+pal <- colorBin(palette = "Blues", # change the color palette here
                 domain = final$avg_rank, # change the parameter name after $
-                bins = c(200, 400, 600, 800, 1000, 1200)) # change the bins here 
+                bins = c(0, 200, 400, 600, 800, 1000, 1200)) # change the bins here 
 
 
-labs <- paste0("<strong>", tst$NAME,
-               "</strong><br/>EVSE Suitability: ", tst$score, 
-               "</strong><br/>Population Density (sqkm): ", tst$density,
-               "</strong><br/>Accessibility Score: ", tst$TSFCA,
-               "</strong><br/>Driving Population %: ", tst$driving_pop,
-               "</strong><br/> Registered EV: ", tst$elec_cnt,
-               "</strong><br/>Avg Distance to EVSE: ", tst$evse.nn,
-               "</strong><br/>Avg Distance to Parking: ", tst$parking.nn,
-               "</strong><br/>Avg Distance to Police & Fire: ", tst$evse.nn
+labs <- paste0("<strong>", final$NAME,
+               "</strong><br/>Avg Rank: ", final$avg_rank, 
+               "</strong><br/>WSM Rank: ", final$wsm_rank, 
+               "</strong><br/>TOPSIS Rank: ", final$topsis_rank, 
+               "</strong><br/>PROMETHEE Rank: ", final$promethee_rank, 
+               "</strong><br/>AHP-TOPSIS Rank: ", final$ahptopsis_rank
                ) 
 
 labs_acme <- paste0("</strong><br/>ACME Address ", acme$Address)
 
 ```
-
-
 
 ```{r}
 leaflet <- final %>%
@@ -638,6 +712,7 @@ leaflet <- final %>%
   addProviderTiles(providers$CartoDB.Positron) %>% 
   addPolygons(weight = 1,
               fillColor = ~pal(avg_rank), # change the name of the parameter in the bracket
+              popup = labs,
               fillOpacity = 1) %>%
   addCircleMarkers(
     data = acme,  # Replace with your actual point data
@@ -652,7 +727,7 @@ leaflet <- final %>%
   addLegend(position = "bottomright",
             pal = pal,
             values = ~avg_rank, # change the name of the parameter after ~
-            title = "EVSE Suitability Score") # change the name of the legend 
+            title = "EVSE Suitability Rank") # change the name of the legend 
 
 leaflet
 ```
