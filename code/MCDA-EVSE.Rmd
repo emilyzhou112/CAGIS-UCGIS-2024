@@ -396,12 +396,12 @@ TOPSIS_toplot <- fishnet_nowater %>%
 
 ```{r}
 
-#quantiles <- classIntervals(TOPSIS_toplot$values, n = 8, style = "quantile")
-#TOPSIS_toplot$quantile <- cut(TOPSIS_toplot$values, breaks = quantiles$brks, include.lowest = TRUE)
+quantiles <- classIntervals(TOPSIS_toplot$values, n = 8, style = "quantile")
+TOPSIS_toplot$quantile <- cut(TOPSIS_toplot$values, breaks = quantiles$brks, include.lowest = TRUE)
 
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=TOPSIS_toplot, color="black", aes(fill=values)) #+ scale_fill_brewer(palette = "Blues")
+  geom_sf(data=TOPSIS_toplot, color="black", aes(fill=quantile))+ scale_fill_brewer(palette = "RdBu")
 ```
 
 
@@ -488,5 +488,129 @@ ggplot()+
 ```
 
 ## AHP + TOPSIS
+
+  mutate(score = 
+  0.12*scl_density + 
+  0.18*scl_evse_re +
+  0.15*scl_elec + 
+  0.1*scl_drivingpop +
+  0.1*scl_parking_re + 
+  0.05*scl_policefire_re + 
+  0.05*zone_score + 
+  0.12*scl_acc_re +
+  0.13*scl_elect_use) 
+
+```{r}
+
+crit <- c("density","evse","ev", "drivingpop", "parking", "policefire", "zoning", "acc", "electricity")
+
+criteriaWeightsPairwiseComparisons <- matrix(c(1.0, 3.0, 2.0, 1/2, 1/2, 1/4, 1/3, 1.5, 1.2,
+                                               1/3, 1.0, 1/1.2, 1/4, 1/4, 1/8, 1/6, 1/2, 1/1.5, 
+                                               1/2, 1.2, 1.0, 1/3, 1/3, 1/6, 1/6, 1/2, 1/1.5, 
+                                               2, 4, 3, 1.0, 1/1.2, 1/4, 1/5, 1.5, 1.8,
+                                               2, 4, 3, 1.2, 1.0, 1/4, 1/4, 2, 1.5, 
+                                               4, 8, 6, 4, 4, 1, 1.2, 3, 2,
+                                               3, 6, 6, 5, 4, 1/1.2, 1, 3, 2,
+                                               1/1,5, 2, 2, 1/1.5, 1/2, 1/3, 1/3, 1, 1.5, 
+                                               1/1.2, 1.5, 1.5, 1/1.8, 1/1.5, 1/2, 1/2, 1/1.5, 1
+                                               ),
+nrow=length(crit),
+ncol=length(crit),
+dimnames=list(crit,crit))
+
+
+```
+
+```{r}
+
+column_sums <- colSums(criteriaWeightsPairwiseComparisons)
+
+# Divide each element by the sum of its column
+normalized_matrix <- sweep(criteriaWeightsPairwiseComparisons, 2, column_sums, FUN = "/")
+
+# Step 3: Calculate the weights
+# Calculate the average of each row
+weights <- rowMeans(normalized_matrix)
+
+# Output the weights
+print(weights)
+
+```
+
+```{r}
+
+# reverse is min
+weights <- c(0.249, 0.114, 0.105, 0.098, 0.1909, 0.074, 0.033, 0.033, 0.102)
+criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max", "max")
+# positiveIdealSolutions <- c(0.17, 0.60, 0.70, 0, 0.50, 0.10, 0.14, 0.3,0.007)
+overall2 <- TOPSIS(performanceTable, weights, criteriaMinMax)
+AHP_TOPSIS <- data.frame(uniqueID = names(overall2), values = overall2) %>%  
+  mutate(uniqueID = as.integer(uniqueID))
+  
+AHP_TOPSIS_toplot <- fishnet_nowater %>% 
+  left_join(TOPSIS, by = "uniqueID") 
+
+
+```
+
+
+```{r}
+
+quantiles <- classIntervals(AHP_TOPSIS_toplot$values, n = 8, style = "quantile")
+AHP_TOPSIS_toplot$quantile <- cut(AHP_TOPSIS_toplot$values, breaks = quantiles$brks, include.lowest = TRUE)
+
+ggplot()+
+  geom_sf(data=fishnet, color="black", fill="white") +
+  geom_sf(data=AHP_TOPSIS_toplot, color="black", aes(fill=quantile)) + scale_fill_brewer(palette = "RdBu")
+```
+
+
+
+# Consistency Check 
+
+AHP_TOPSIS, TOPSIS, WSM, PROMETHEE
+
+```{r}
+
+TOPSIS <- TOPSIS %>%
+  mutate(topsis_rank = min_rank(desc(values)))
+
+WSM <- WSM %>% 
+  dplyr::select(c(uniqueID, score)) %>% 
+  mutate(wsm_rank = min_rank(desc(score)))
+
+PROMETHEE <- promethee_df %>% 
+  mutate(promethee_rank = min_rank(desc(net)))
+
+AHP_TOPSIS <- AHP_TOPSIS %>% 
+  mutate(ahptopsis_rank = min_rank(desc(values)))
+
+rank_compare <- WSM %>% 
+  st_drop_geometry() %>% 
+  dplyr::select(c(uniqueID, wsm_rank)) %>% 
+  left_join(., TOPSIS %>% dplyr::select(uniqueID, topsis_rank), by = "uniqueID") %>% 
+  left_join(., PROMETHEE %>% dplyr::select(uniqueID, promethee_rank), by = "uniqueID") %>% 
+  left_join(., AHP_TOPSIS %>% dplyr::select(uniqueID, ahptopsis_rank), by = "uniqueID") %>% 
+  mutate(avg_rank = (wsm_rank + topsis_rank + promethee_rank + ahptopsis_rank) / 4)
+
+rank_toplot <- fishnet_nowater %>% 
+  left_join(rank_compare, by = "uniqueID")
+ggplot()+
+  geom_sf(data=fishnet, color="black", fill="white") +
+  geom_sf(data=rank_toplot, color="black", aes(fill=avg_rank))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
