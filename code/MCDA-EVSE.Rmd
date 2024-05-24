@@ -489,17 +489,6 @@ ggplot()+
 
 ## AHP + TOPSIS
 
-  mutate(score = 
-  0.12*scl_density + 
-  0.18*scl_evse_re +
-  0.15*scl_elec + 
-  0.1*scl_drivingpop +
-  0.1*scl_parking_re + 
-  0.05*scl_policefire_re + 
-  0.05*zone_score + 
-  0.12*scl_acc_re +
-  0.13*scl_elect_use) 
-
 ```{r}
 
 crit <- c("density","evse","ev", "drivingpop", "parking", "policefire", "zoning", "acc", "electricity")
@@ -597,12 +586,76 @@ rank_toplot <- fishnet_nowater %>%
   left_join(rank_compare, by = "uniqueID")
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=rank_toplot, color="black", aes(fill=avg_rank))
+  geom_sf(data=rank_toplot, color="black", aes(fill=avg_rank)) +
+  geom_sf(data=acme, color="red")
+```
+
+# Public Private Partnership
+
+```{r}
+
+acme <- read.csv(here("data", "raw", "acme.csv")) %>% 
+  st_as_sf(., coords = c("Longitude", "Latitude"), crs = 4326) %>% 
+  mutate(longitude= unlist(map(geometry, 1)),
+         latitude = unlist(map(geometry, 2)))
+
+```
+
+
+```{r}
+
+final <- fishnet_nowater %>% 
+  left_join(., rank_compare, by = "uniqueID")
+
+
+pal <- colorBin(palette = "viridis", # change the color palette here
+                domain = final$avg_rank, # change the parameter name after $
+                bins = c(200, 400, 600, 800, 1000, 1200)) # change the bins here 
+
+
+labs <- paste0("<strong>", tst$NAME,
+               "</strong><br/>EVSE Suitability: ", tst$score, 
+               "</strong><br/>Population Density (sqkm): ", tst$density,
+               "</strong><br/>Accessibility Score: ", tst$TSFCA,
+               "</strong><br/>Driving Population %: ", tst$driving_pop,
+               "</strong><br/> Registered EV: ", tst$elec_cnt,
+               "</strong><br/>Avg Distance to EVSE: ", tst$evse.nn,
+               "</strong><br/>Avg Distance to Parking: ", tst$parking.nn,
+               "</strong><br/>Avg Distance to Police & Fire: ", tst$evse.nn
+               ) 
+
+labs_acme <- paste0("</strong><br/>ACME Address ", acme$Address)
+
 ```
 
 
 
+```{r}
+leaflet <- final %>%
+  st_transform("EPSG:4326") %>% 
+  leaflet() %>%
+  setView(lng = -75.1652, lat = 40.0126, zoom = 10.5) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(weight = 1,
+              fillColor = ~pal(avg_rank), # change the name of the parameter in the bracket
+              fillOpacity = 1) %>%
+  addCircleMarkers(
+    data = acme,  # Replace with your actual point data
+    lng = ~longitude,  # Replace with the appropriate variable in your point dataset for longitude
+    lat = ~latitude,  # Replace with the appropriate variable in your point dataset for latitude
+    weight = 0.5,
+    radius = 4,
+    fillColor = "red",  # Set the fill color for the markers
+    fillOpacity = 1,
+    popup = ~labs_acme  # Replace with the appropriate variable in your point dataset for popup text
+  ) %>% 
+  addLegend(position = "bottomright",
+            pal = pal,
+            values = ~avg_rank, # change the name of the parameter after ~
+            title = "EVSE Suitability Score") # change the name of the legend 
 
+leaflet
+```
 
 
 
