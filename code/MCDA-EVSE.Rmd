@@ -273,6 +273,8 @@ fishnet_nowater <- fishnet_nowater %>%
 
 ```{r aggregate power grid}
 
+# buffer the building and aggregate building centroid into the buffer
+# if outside the buffer, get the nearest neighbor
 elec_grid <- st_join(net_centroid, 
                 electricity %>% st_buffer(dist = 1640)) %>% 
   group_by(uniqueID.x) %>% 
@@ -307,8 +309,11 @@ fishnet_nowater <- fishnet_nowater %>%
 ```
 
 
-
 # Multi-Criteria Decision Analysis
+
+- Transform indicator data into standard **geographic unit**. This include: aggregate or dissolve for nested relationship, area-weighted re-aggregation for un-nested relationship, count points within polygons, etc. 
+- Transform indicator data into standard **measuring unit**. This include: rank or percentile, z-score, some other functions. 
+- Combine indicator data into a composite score with certain weights. 
 
 ## Self-Assigned Weight + WSM
 
@@ -332,6 +337,7 @@ WSM <- fishnet_nowater %>%
   mutate(score = 0.12*scl_density + 0.18*scl_evse_re + 0.15*scl_elec + 0.1*scl_drivingpop + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.12*scl_acc_re +0.13*scl_elect_use) # self assign weight
 ```
 
+South Philadelphia stands out. 
 
 ```{r}
 
@@ -343,8 +349,20 @@ ggplot()+
   geom_sf(data=WSM, color="black", aes(fill=score)) #+ scale_fill_brewer(palette = "Blues")
 ```
 
+## Self Assigned Weight + Classical TOPSIS
 
-## Self Assigned Weight + TOPSIS
+This approach is employed for four main reasons:
+- Logic is rational and understandable
+- The computation process is straightforward
+- The concept permits the pursuit of the best alternatives for each criterion depicted in a simple mathematicl form.
+- The importance weights are incorporated into the comparison procedure. 
+
+1. Construct the decision matrix where each element represents the performance score of each alternatives.
+2. Normalization
+3. Determine the ideal and negative ideal solution. In other words, the best and worst possible value for each criterion. 
+4. Calculate the separation measure as in euclidean distance calculation. 
+5. Measure relative closeness: how close each alternative is to the ideal solution relative to its distance from the negative-ideal solution. 
+6. Ranking 
 
 ```{r}
 
@@ -365,7 +383,7 @@ rownames(performanceTable) <- uniqueIDs
 ```
 
 ```{r}
-
+# come up with a positive ideal solutions
 summary(performanceTable$evse.nn)
 summary(performanceTable$density)
 summary(performanceTable$driving_pop) 
@@ -404,6 +422,7 @@ ggplot()+
   geom_sf(data=TOPSIS_toplot, color="black", aes(fill=quantile))+ scale_fill_brewer(palette = "RdBu")
 ```
 
+However, the TOPSIS method presents certain drawbacks. One of the problems attributable to TOPSIS is that it can cause the phenomenon known as rank reversal. In this phenomenon the alternatives’ order of preference changes when an alternative is added to or removed from the decision problem. In some cases this may lead to what is called total rank reversal, where the order of preferences is totally inverted, that is to say, that the alternative considered the best, with the inclusion or removal of an alternative from the process, then becomes the worst. 
 
 ```{r}
 summary(TOPSIS$values)
@@ -411,7 +430,25 @@ summary(TOPSIS$values)
 
 ## Self Assigned Weights + PROMETHEE
 
-Now, this is based solely on quantitative analysis on the distribution of the data. 
+1. Calculate the difference in performance scores for each criterion between all pairs of alternatives.
+2. Set up an indifference threshold.
+3. Set up a preference threshold. 
+4. Decide a preference function
+5. Apply the preference function using the indifference and preference threshold to convert the differences into preference value, which is typically betweeen 0 and 1. 
+6. For each alternative, sum the preference values across all criteria to obtain the aggregated preference indices.
+7. Calculate the positive and negative outranking flows for each alternative, which represent how much an alternative outranks others and is outranked by others, respectively.
+8. Use the net outranking flow (positive flow minus negative flow) to rank the alternatives.
+
+The gaussParameter vector in the code specifies the standard deviation (s) for the Gaussian preference function for each criterion.
+
+Terminology: 
+- preference function: define how much better one site is better over another for each criterion (a linear function where the lower the accessibility, the better)
+
+- preference threshold: the minimum difference between the performance of two alternatives on a given criterion such that the decision-maker has a strict preference for one alternative over the other. **If the performance difference is greater than or equal to p, the decision-maker clearly prefers one alternative over the other for that criterion. **
+
+- indifference threshold: The indifference threshold q represents the maximum difference between the performance of two alternatives on a given criterion such that the decision-maker is indifferent between them. **If the performance difference is less than or equal to q, the decision-maker considers the two alternatives to be effectively equal with respect to that criterion.**
+
+Now, this positive and negative ideal scenario is based solely on quantitative analysis on the distribution of the data. 
 ```{r}
 
 IQR(performanceTable$evse.nn) / 3
@@ -489,6 +526,7 @@ ggplot()+
 
 ## AHP + TOPSIS
 
+
 ```{r}
 
 crit <- c("density","evse","ev", "drivingpop", "parking", "policefire", "zoning", "acc", "electricity")
@@ -555,7 +593,6 @@ ggplot()+
 
 # Consistency Check 
 
-AHP_TOPSIS, TOPSIS, WSM, PROMETHEE
 
 ```{r}
 
@@ -582,16 +619,20 @@ rank_compare <- WSM %>%
 
 ```
 
+We took the average rank among all methods
+We would like to find places in Philadelphia that are consistently ranked more suitable than other. 
+
 ```{r}
 rank_toplot <- fishnet_nowater %>% 
   left_join(rank_compare, by = "uniqueID")
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=rank_toplot, color="black", aes(fill=avg_rank)) +
-  geom_sf(data=acme, color="red")
+  geom_sf(data=rank_toplot, color="black", aes(fill=avg_rank))
 ```
 
 ## Further Analysis
+
+We would like to see if some neighborhoods are more suitable than others overall. 
 
 ```{r}
 neighborhood <- st_read(here("data", "raw", "PhillyPlanning_Neighborhoods", "PhillyPlanning_Neighborhoods.shp")) %>% st_transform('ESRI:102728') 
@@ -618,6 +659,13 @@ final %>%
   geom_sf(color="black", aes(fill=overall_rank))
   
 ```
+Distribution of differences in rank between different methods:
+
+Comparing across topsis, promethee, and weighted sum in ranking the alternatives:
+- All methods rank alternatives differently. 
+- The differences in rank between weighted sum and promethee method is the smallest. 
+- Comparing topsis to weighted sum method and the promethee method, rank reversal is definitely an issue. There are a few grids where TOPSIS significantly over-rank and/or under-rank grids. 
+- comparing self-assigned weight method with using the ahp, there are a lot of positive values, meaning that self-assigned weight has under-ranked sites than using the ahp. 
 
 
 ```{r}
@@ -638,7 +686,7 @@ compare %>%
                values_to = "value") %>% 
   ggplot(aes(x = value)) +
   geom_histogram(binwidth = 10, fill = "blue", color = "black", alpha = 0.7) +
-  labs(title = "Distribution of Differences Between Different Methods",
+  labs(title = "Distribution of Differences in Rank Between Different Methods",
        x = "Difference",
        y = "Frequency") +
   theme_minimal() +
@@ -647,6 +695,9 @@ compare %>%
 
 ```
 
+Closer examinations reveal that for places where promethee and wsm both give a low rank, the outskirt of philadelpia, topsis give a higher rank and vice versa. TOPSIS can also be sensitive to the addition of new criteria. 
+
+When a new alternative is introduced or an existing one is removed, the distances to the ideal and negative-ideal solutions can change. The presence of extreme values (very high or very low) can significantly influence the ideal and negative-ideal solutions. Assues independence of criteria. 
 
 ```{r fig.height=14, fig.width=12}
 
@@ -663,13 +714,49 @@ compare %>%
   labs(title = "Map with Divergent Color Ramp") +
   theme_minimal() +
   facet_wrap(~ variable)
-  
-
-
 
 ```
 
 
+Comparing the MCDA Method
+WSM:
+- Easy to understand and implement. 
+- Only requires determining the weights. 
+- Assumes that criteria are linearly additive.
+- Results heavily depend on the assigned weights. 
+
+PROMETHEE:
+- Allows for detailed preference modeling with different preference function. 
+- Introduce some forms of pair-wise comparison between alternatives. 
+- Requires careful selection of preference functions and preference function, indifference threshold 
+- Computationally intensive
+
+TOPSIS:
+- Easy to understand and implement.
+- Assumes that the criteria are independent of each other
+- Suffer from reversal rank problem. 
+- Require deciding upon the positive and negative ideal scenario. 
+
+Comparing weighting Method
+AHP:
+- a structured approach that breaks complex decisions into manageable parts. 
+- pairwise comparison can be subjective and biased 
+- maintain consistency in comparison can be challenging. 
+
+
+Takeaways:
+
+1. Our study provided a spatially informed starting point to identify potential areas for new EVSE that contribute to Philadelphia's sustainable transportation goals. 
+
+2. Our study highlighted the challenges in agreeing on the input criteria and weighting scheme and that different weighting scheme could significantly alter the result. Considering multiple goals here, including equity,sustainable transportation, affordability, etc.,  what should be included and how important they are become important questions to consider.  
+
+3. There's no perfect decision making model. Methods that are more complicated and robust mathematically 1) requires more decision inputs, which is more time consuming on the stakeholder side and introduces more subjectivity 2) could be more computationally intensive, 3) less intuitive to non-experts. 
+
+4. The state of GIS model for decision making. We need to decide upon the best possible course of action for the future, often with incomplete information and competing/conflicting interests at stake. The best practice is to not rely on a single method in decision making. Beyond using MCDA models, it is essential to check the actual site condition before making final decisions. Note that there are things that spatial analysis cannot capture. 
+
+5. Our study have also highlighted several recurrent challenges in geospatial model for decision making. Specifically, the modifiable areal unit problem (MAUP) is a source of uncertainty, considering that out raw data all comes with different spatial unit and needs to be re-aggregated before proceed. In addition, ecological fallacy could be an issues as we are making inference about a small portion of the population using tract level statistics for the whole population.Moreover, errors and uncertainties may also arise when dealing with missing information, when we make assumptions/spatial interpolations about a neighboring grids' situation. 
+
+6. The use of a MCDM framework based on characterization of alternatives could inform short term choices considering known constraints and preferences. Moving forward, we would like to look for ways to bridge the gap between short term decision making and long-term planning in a context of rapidly changing projections regarding future states of EV usage/climate scenarios. We believe the innovation lies in developing a structured and replicable framework that can provide a model for other cities facing similar challenges. 
 
 
 # Public Private Partnership
