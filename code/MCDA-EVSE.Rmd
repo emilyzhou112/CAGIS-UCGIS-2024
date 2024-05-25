@@ -593,7 +593,6 @@ ggplot()+
 
 # Consistency Check 
 
-
 ```{r}
 
 TOPSIS <- TOPSIS %>%
@@ -630,7 +629,7 @@ ggplot()+
   geom_sf(data=rank_toplot, color="black", aes(fill=avg_rank))
 ```
 
-## Further Analysis
+# Further Analysis
 
 We would like to see if some neighborhoods are more suitable than others overall. 
 
