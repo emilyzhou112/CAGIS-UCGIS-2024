@@ -1,13 +1,40 @@
 ---
-title: "MCDA-EVSE"
-author: "Emily Zhou"
-date: "2024-05-10"
-output: html_document
+title: "Advancing Sustainable Mobility: A GIS-Based Multi-Criteria Decision Analysis for Equitable Electric Vehicle Supply Equipment Deployment in Philadelphia"
+author: "Emily Zhou, Junyi Yang"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: simplex
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+    code_download: yes
+editor_options:
+  markdown:
+    wrap: sentence
 ---
+
+Version 2.0 \| First Created Nov 17, 2023 \| Updated Jun 2, 2024
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+# Abstract 
+
+The transition from traditional fossil fuel vehicles to electric vehicles (EVs) stands out as a pivotal solution to decarbonize the transportation systems and combat the climate crisis. However, the widespread adoption of EVs faces challenges, with one significant obstacle being the expansion of electric vehicle supply equipment (EVSE). The City of Philadelphia’s Office of Innovation Technology (OIT) is actively engaged in developing a network of extensive, equitable, and accessible EVSEs as part of its Smart City initiatives. Despite these efforts, the initiative faces a common challenge related to the selection of suitable sites.
+
+We share a geographic information system (GIS)-based multi-criteria decision analysis (MCDA) method that can be used to evaluate the suitability of potential EVSE sites to support the sustainable and equitable deployment of EVSE in Philadelphia. Our MCDA approach considers key criteria ranging from socio-demographic indicators (e.g. driving-age population) to site-specific characteristics (e.g. spatial accessibility of existing EVSEs, availability of public parking garages, and city-wide power grid) and is based on the Analytic Hierarchy Process (AHP). To identify the optimal sites, three MCDA methods – WSM (weighted sum method), PROMETHEE (Method for Organizing Ranking of Preferences for Enrichment), as well as TOPSIS (Technique for Order Preference by Similarity to Ideal Solutions) – are applied and compared. 
+
+We implemented our study with open-source R markdown and acquired data from the American Community Survey (ACS), OpenStreetMap, and the US Department of Energy. Specifically, a five-step solution approach is developed for the problem: 1) creating a fishnet for Philadelphia as the spatial unit for analysis and removing any water features, 2) determining and preprocessing criteria, among which we calculated the spatial accessibility of EVSEs using 2SFCA and distance to parking lots using k-nearest neighbor, 3) aggregating criteria into the fishnet, 4) prioritizing the criteria using AHP and finally 5) ranking the potential sites using WSM, PROMETHEE, and TOPSIS. 
+
+The results of our MCDAs highlighted several areas in Philadelphia with a pronounced demand for new EVSE. We selected one of those sites in South Philadelphia and proposed a public-private partnership model between Philadelphia’s OIT and local grocery stores to install and maintain the EVSEs. We subsequently conducted financial analyses for the cost and revenue of breakdowns and designed a phased implementation of EVSE infrastructure given the current site conditions. Our study highlighted the challenges of agreeing on the input criteria and weighting schemes in MCDA but provided a spatially informed starting point to identify sites for new EVSE that contribute to Philadelphia’s sustainable transportation goals while addressing social disparities. It also provides a scalable and replicable model for other cities facing similar challenges in deploying EVSE and advancing smart city initiatives. More importantly, it emphasized the potential of geospatial analysis in shaping a more climate-smart and equitable future. 
+
+The study is conducted collaboratively by graduate students from the Weitzman School of Design and Wharton Business School at the University of Pennsylvania and is available as a reproducible repository on [GitHub](https://github.com/emilyzhou112/CAGIS-UCGIS-2024).
+
+## Keywords
+
+Multi-Criteria Decision Analysis, Analytic Hierarchy Process, Electric Vehicle Supply Equipment, Sustainable Transportation, Smart City, GIS
 
 # Setup
 
@@ -39,12 +66,12 @@ writeLines(
 
 # Study Area
 
-```{r process study area}
+```{r process study area, warning=FALSE, message=FALSE}
 
 philly <- st_read(here("data", "raw", "city_boundary.geojson")) %>% st_transform('ESRI:102728')
 water <- st_read(here("data", "raw", "water_features.geojson")) %>% st_transform('ESRI:102728')
 
-# generate fishnet for philadelphia
+# generate fishnet for Philadelphia
 fishnet <- st_make_grid(philly,
                         cellsize = 1640, # 500 meters
                         square = TRUE) %>% 
@@ -66,7 +93,7 @@ fishnet_nowater <- fishnet %>%
 
 ```{r map study grids}
 ggplot() +
-  geom_sf(data=fishnet, color="black", fill="blue") +
+  geom_sf(data=fishnet, color="black", fill="#726DA8") +
   geom_sf(data=fishnet_nowater, color="black", fill="white") +
   labs(title = "Fishnet of Philly") +
   theme(axis.text.x=element_blank(),
@@ -81,18 +108,25 @@ ggplot() +
         )
 ```
 
+```{r save the intermediaries}
+
+st_write(fishnet, here("data", "derived", "philly_fishnet.geojson"), driver = "GeoJSON")
+st_write(fishnet_nowater, here("data", "derived", "fishnet_nowater.geojson"), driver = "GeoJSON")
+
+```
+
 # Criteria Processing 
 
 ## Demographic Information and EV Ownership
 
-```{r load demographic info}
+```{r load demographic info, message=FALSE, warning=FALSE}
 
 options(timeout=1000) 
 
 # get API Key
-# census_api_key(dlgInput("Enter a Census API Key", 
-#   Sys.getenv("CENSUS_API_KEY"))$res,
-#   overwrite = TRUE)
+census_api_key(dlgInput("Enter a Census API Key", 
+   Sys.getenv("CENSUS_API_KEY"))$res,
+   overwrite = TRUE)
 
 # query 2020 acs data
 philly20 <- get_acs(geography = "tract", 
@@ -139,7 +173,14 @@ philly20 <- philly20 %>%
 ```
 
 
-```{r load registered ev}
+```{r save the queried acs information}
+
+st_write(philly20, here("data", "derived", "acs2020.geojson"), driver = "GeoJSON")
+
+```
+
+
+```{r load registered ev, message=FALSE, warning=FALSE}
 
 reg_ev <- st_read(here("data", "raw", "reg_ev.geojson"))
 Zip_Code <- as.character(c(
@@ -161,10 +202,9 @@ reg_ev <- reg_ev %>%
 ```
 
 
-
 ## Existing EVSE Distribution and Access
 
-```{r load existing evse}
+```{r load existing evse, message=FALSE, warning=FALSE}
 
 evse <- read.csv(here("data", "raw", "existing_evse.csv"))
 evse <- evse %>% 
@@ -178,7 +218,7 @@ evse <- evse %>%
 ```
 
 
-```{r compute spatial accessibility}
+```{r compute spatial accessibility, message=FALSE, warning=FALSE}
 
 tracts.coords <- st_coordinates(st_centroid(philly20))
 evse.coords <- st_coordinates(evse)
@@ -192,9 +232,9 @@ philly20 <- philly20 %>%
 ```
 
 
-## Other Considerations
+## Local Environment
 
-```{r}
+```{r load site environmental metrics, message=FALSE, warning=FALSE}
 
 parking <- st_read(here("data", "raw", "osm_features", "parking.geojson"))
 parking <- parking %>% 
@@ -218,6 +258,11 @@ zoning <- zoning %>%
                              zoning == "Industrial" ~ 0.15,
                              zoning == "Residential" ~ 0.3,
                              TRUE ~ 0.15))
+```
+
+## Energy
+
+```{r load property electricity data, message=FALSE, warning=FALSE}
 
 electricity <- read.csv(here("data", "raw", "property-electricity-data.csv")) %>% 
   dplyr::select(Y = y_coord, X = x_coord, portfolio_bldg_id, postal_code, primary_property_type, sector, electricity_2021) %>%
@@ -225,13 +270,11 @@ electricity <- read.csv(here("data", "raw", "property-electricity-data.csv")) %>
   st_as_sf(coords = c("X", "Y"), crs = 4326, agr = "constant") %>%
   st_transform('ESRI:102728') %>% 
   st_intersection(., fishnet) # clip to fishnet extent
-
 ```
-
 
 # Aggregate Criteria
 
-```{r aggregate all criteria into fishnet}
+```{r aggregate all criteria into fishnet, message=FALSE, warning=FALSE}
 
 net_centroid <- st_centroid(fishnet_nowater)
 fishnet_nowater <- fishnet_nowater %>%
@@ -271,7 +314,7 @@ fishnet_nowater <- fishnet_nowater %>%
 ```
 
 
-```{r aggregate power grid}
+```{r aggregate power grid, message=FALSE, warning=FALSE}
 
 # buffer the building and aggregate building centroid into the buffer
 # if outside the buffer, get the nearest neighbor
@@ -304,20 +347,34 @@ elec_grid <- elec_grid %>%
   st_drop_geometry()
 
 fishnet_nowater <- fishnet_nowater %>% 
-  left_join(., elec_grid, by = c("uniqueID" = "uniqueID.x") ) %>% 
-  # filter(uniqueID != 1592,)
+  left_join(., elec_grid, by = c("uniqueID" = "uniqueID.x"))
 ```
 
 
+```{r save all aggregated criteria}
+
+st_write(fishnet_nowater, here("data", "derived", "all_criteria_raw.geojson"), driver = "GeoJSON")
+
+```
+
 # Multi-Criteria Decision Analysis
 
-- Transform indicator data into standard **geographic unit**. This include: aggregate or dissolve for nested relationship, area-weighted re-aggregation for un-nested relationship, count points within polygons, etc. 
-- Transform indicator data into standard **measuring unit**. This include: rank or percentile, z-score, some other functions. 
-- Combine indicator data into a composite score with certain weights. 
+In it's simplest term, MCDA can be summarized into three steps.
+1. Transform indicator data into standard **geographic unit**. This include: aggregate or dissolve for nested relationship, area-weighted re-aggregation for un-nested relationship, count points within polygons, etc. 
+2. Transform indicator data into standard **measuring unit**. This include: rank or percentile, z-score, some other functions. 
+3. Combine indicator data into a composite score with certain weights. 
 
 ## Self-Assigned Weight + WSM
 
-```{r}
+The Weighted Sum Method is one of the simplest and most commonly used MCDA techniques. In WSM, each criterion is assigned a weight based on its importance, and each alternative is scored based on these criteria. The final score for each alternative is calculated by summing the products of the scores and their respective weights.
+
+1. Scale all the criteria from 0 to 1. 
+2. Invert the scale for certain criteria if necessary. 
+3. Assign a weight to each criterion reflecting its relative importance. The sum of weights should equal 1.
+4. For each alternative, multiply the performance score of each criterion by its weight and sum the results.
+5. Rank the alternatives based on their total weighted scores.
+
+```{r weighted sum}
 
 scale_values <- function(x){(x-min(x))/(max(x)-min(x))}
 WSM <- fishnet_nowater %>% 
@@ -337,25 +394,39 @@ WSM <- fishnet_nowater %>%
   mutate(score = 0.12*scl_density + 0.18*scl_evse_re + 0.15*scl_elec + 0.1*scl_drivingpop + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.12*scl_acc_re +0.13*scl_elect_use) # self assign weight
 ```
 
-South Philadelphia stands out. 
 
-```{r}
+```{r visualize weighted sum}
 
-#quantiles <- classIntervals(WSM$score, n = 8, style = "quantile")
-#WSM$quantile <- cut(WSM$score, breaks = quantiles$brks, include.lowest = TRUE)
+quantiles <- classIntervals(WSM$score, n = 6, style = "quantile")
+WSM$quantile <- cut(WSM$score, breaks = quantiles$brks, include.lowest = TRUE)
 
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=WSM, color="black", aes(fill=score)) #+ scale_fill_brewer(palette = "Blues")
+  geom_sf(data=WSM, color="black", aes(fill=quantile)) + 
+  scale_fill_brewer(palette = "Blues") + 
+  labs(title = "Weighted Sum Method Score", fill = "Bins") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
 ```
 
-## Self Assigned Weight + Classical TOPSIS
+```{r save a version}
 
-This approach is employed for four main reasons:
-- Logic is rational and understandable
-- The computation process is straightforward
-- The concept permits the pursuit of the best alternatives for each criterion depicted in a simple mathematicl form.
-- The importance weights are incorporated into the comparison procedure. 
+st_write(WSM, here("data", "derived", "WSM.geojson"), driver = "GeoJSON")
+
+```
+
+
+## Self Assigned Weight + TOPSIS
+
+TOPSIS is a method that identifies solutions from a finite set of alternatives based on their geometric distance from an ideal solution. The ideal solution has the best performance values for all criteria, and the negative-ideal solution has the worst. This approach is employed widely for four main reasons: 1) the logic is rational and understandable, 2) the computation process is straightforward, 3) the concept permits the pursuit of the best alternatives for each criterion depicted in a simple mathematical form, 4) the importance weights are incorporated into the comparison procedure. 
 
 1. Construct the decision matrix where each element represents the performance score of each alternatives.
 2. Normalization
@@ -364,7 +435,7 @@ This approach is employed for four main reasons:
 5. Measure relative closeness: how close each alternative is to the ideal solution relative to its distance from the negative-ideal solution. 
 6. Ranking 
 
-```{r}
+```{r construct performance table}
 
 performanceTable <- fishnet_nowater %>% 
   dplyr::select(-c(uniqueID)) %>% 
@@ -382,27 +453,14 @@ uniqueIDs <- fishnet_nowater$uniqueID
 rownames(performanceTable) <- uniqueIDs
 ```
 
-```{r}
-# come up with a positive ideal solutions
-summary(performanceTable$evse.nn)
-summary(performanceTable$density)
-summary(performanceTable$driving_pop) 
-summary(performanceTable$TSFCA) 
-summary(performanceTable$elec_cnt) 
-summary(performanceTable$parking.nn) 
-summary(performanceTable$policefire.nn) 
-summary(performanceTable$zone_score) 
-summary(performanceTable$elect_use) 
 
-```
-
-```{r}
+```{r topsis operations}
 
 # reverse is min
 weights <- c(0.18, 0.12, 0.1, 0.12, 0.15, 0.1, 0.05, 0.05, 0.13)
 criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max", "max")
-positiveIdealSolutions <- c(0.17, 0.60, 0.70, 0, 0.50, 0.10, 0.14, 0.3,0.007)
-overall1 <- TOPSIS(performanceTable, weights, criteriaMinMax, positiveIdealSolutions)
+# positiveIdealSolutions <- c(0.17, 0.60, 0.70, 0, 0.50, 0.10, 0.14, 0.3,0.007)
+overall1 <- TOPSIS(performanceTable, weights, criteriaMinMax)
 TOPSIS <- data.frame(uniqueID = names(overall1), values = overall1) %>%  
   mutate(uniqueID = as.integer(uniqueID))
   
@@ -412,23 +470,41 @@ TOPSIS_toplot <- fishnet_nowater %>%
 ```
 
 
-```{r}
+```{r visualize topsis result}
 
-quantiles <- classIntervals(TOPSIS_toplot$values, n = 8, style = "quantile")
+quantiles <- classIntervals(TOPSIS_toplot$values, n = 6, style = "quantile")
 TOPSIS_toplot$quantile <- cut(TOPSIS_toplot$values, breaks = quantiles$brks, include.lowest = TRUE)
 
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=TOPSIS_toplot, color="black", aes(fill=quantile))+ scale_fill_brewer(palette = "RdBu")
+  geom_sf(data=TOPSIS_toplot, color="black", aes(fill=quantile))+ 
+  scale_fill_brewer(palette = "Blues") + 
+  labs(title = "TOPSIS Score", fill = "Bins") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
 ```
 
 However, the TOPSIS method presents certain drawbacks. One of the problems attributable to TOPSIS is that it can cause the phenomenon known as rank reversal. In this phenomenon the alternatives’ order of preference changes when an alternative is added to or removed from the decision problem. In some cases this may lead to what is called total rank reversal, where the order of preferences is totally inverted, that is to say, that the alternative considered the best, with the inclusion or removal of an alternative from the process, then becomes the worst. 
 
-```{r}
-summary(TOPSIS$values)
+
+```{r save a version}
+
+st_write(TOPSIS_toplot, here("data", "derived", "TOPSIS.geojson"), driver = "GeoJSON")
+
 ```
 
+
 ## Self Assigned Weights + PROMETHEE
+
+PROMETHEE is a ranking method based on pairwise comparisons of alternatives according to each criterion, considering both preference and indifference thresholds. Preference threshold refers to the minimum difference between the performance of two alternatives on a given criterion such that the decision-maker has a strict preference for one alternative over the other. **If the performance difference is greater than or equal to p, the decision-maker clearly prefers one alternative over the other for that criterion.** The indifference threshold q represents the maximum difference between the performance of two alternatives on a given criterion such that the decision-maker is indifferent between them. **If the performance difference is less than or equal to q, the decision-maker considers the two alternatives to be effectively equal with respect to that criterion.** A preference function, which define how much better one site is over another for each criterion (a linear function where the lower the accessibility, the better), is then applied based on the two thresholds. 
 
 1. Calculate the difference in performance scores for each criterion between all pairs of alternatives.
 2. Set up an indifference threshold.
@@ -439,17 +515,9 @@ summary(TOPSIS$values)
 7. Calculate the positive and negative outranking flows for each alternative, which represent how much an alternative outranks others and is outranked by others, respectively.
 8. Use the net outranking flow (positive flow minus negative flow) to rank the alternatives.
 
-The gaussParameter vector in the code specifies the standard deviation (s) for the Gaussian preference function for each criterion.
+Now, this indifference and preference thresholds are based solely on quantitative analysis on the distribution of the data. We computed the IQR for all criteria and use that as the preference threshold. We divide the IQR by three and use that as the indifference threshold. 
 
-Terminology: 
-- preference function: define how much better one site is better over another for each criterion (a linear function where the lower the accessibility, the better)
-
-- preference threshold: the minimum difference between the performance of two alternatives on a given criterion such that the decision-maker has a strict preference for one alternative over the other. **If the performance difference is greater than or equal to p, the decision-maker clearly prefers one alternative over the other for that criterion. **
-
-- indifference threshold: The indifference threshold q represents the maximum difference between the performance of two alternatives on a given criterion such that the decision-maker is indifferent between them. **If the performance difference is less than or equal to q, the decision-maker considers the two alternatives to be effectively equal with respect to that criterion.**
-
-Now, this positive and negative ideal scenario is based solely on quantitative analysis on the distribution of the data. 
-```{r}
+```{r determine indifference and preference threshold}
 
 IQR(performanceTable$evse.nn) / 3
 IQR(performanceTable$density) / 3
@@ -463,7 +531,8 @@ IQR(performanceTable$elect_use) / 3
 
 ```
 
-```{r}
+
+```{r promethee operations}
 
 criteriaWeights <- c(0.18, 0.12, 0.1, 0.12, 0.15, 0.1, 0.05, 0.05, 0.13)
 names(criteriaWeights)<-colnames(performanceTable)
@@ -472,6 +541,8 @@ criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max", "max
 names(criteriaMinMax)<-colnames(performanceTable)
 
 preferenceFunction<-c("Usual","U-shape","V-shape","Level","V-shape-Indiff","Gaussian", "Level","V-shape-Indiff", "Level")
+# The gaussParameter vector in the code specifies the standard deviation (s) for the Gaussian preference 
+# function for each criterion.
 gaussParameter<-c(0.25,1,2,0,0,0,0,0,0)
 names(gaussParameter)<-colnames(performanceTable)
 
@@ -483,24 +554,13 @@ names(preferenceThreshold)<-colnames(performanceTable)
 indifferenceThreshold<-c(0.1, 0.07, 0.041, 0, 0.058, 0.065, 0.078, 0.025, 0.001789115)
 names(indifferenceThreshold)<-colnames(performanceTable)
 
-
-```
-
-
-```{r}
 performanceTable <- as.matrix(performanceTable)
-```
-
-
-```{r}
-
 promethee <- PROMETHEEOutrankingFlows(performanceTable, preferenceFunction,preferenceThreshold,
 indifferenceThreshold,gaussParameter,criteriaWeights,criteriaMinMax)
 ```
 
 
-```{r}
-
+```{r clean up promethee table}
 
 promethee_df <- data.frame(uniqueID = names(promethee$outrankingFlowsPos), 
            Pos = unname(promethee$outrankingFlowsPos),
@@ -515,19 +575,41 @@ PROMETHEE_toplot <- fishnet_nowater %>%
 ```
 
 
-```{r}
-#quantiles <- classIntervals(PROMETHEE_toplot$net, n = 8, style = "quantile")
-#PROMETHEE_toplot$quantile <- cut(PROMETHEE_toplot$net, breaks = quantiles$brks, include.lowest = TRUE)
+```{r visualize promethee}
+quantiles <- classIntervals(PROMETHEE_toplot$net, n = 6, style = "quantile")
+PROMETHEE_toplot$quantile <- cut(PROMETHEE_toplot$net, breaks = quantiles$brks, include.lowest = TRUE)
 
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=PROMETHEE_toplot, color="black", aes(fill=net)) #+ scale_fill_brewer(palette = "Blues")
+  geom_sf(data=PROMETHEE_toplot, color="black", aes(fill=quantile)) + 
+  scale_fill_brewer(palette = "Blues") +
+  labs(title = "PROMETHEE Score", fill = "Bins") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
+```
+
+
+```{r save a version}
+
+st_write(PROMETHEE_toplot, here("data", "derived", "PROMETHEE.geojson"), driver = "GeoJSON")
+
 ```
 
 ## AHP + TOPSIS
 
+To determine weights using the Analytic Hierarchy Process (AHP), start by defining the decision problem and structuring it into a hierarchy, including the goal at the top, followed by criteria and sub-criteria (if any), and the alternatives at the bottom. Construct pairwise comparison matrices for the criteria by comparing each pair and assigning relative importance values on a scale from 1 to 9. Normalize the matrices by dividing each element by the sum of its column, then calculate the priority vector (weights) by averaging the normalized values across each row. 
 
-```{r}
+
+
+```{r set up pairwise matrix}
 
 crit <- c("density","evse","ev", "drivingpop", "parking", "policefire", "zoning", "acc", "electricity")
 
@@ -548,15 +630,13 @@ dimnames=list(crit,crit))
 
 ```
 
-```{r}
+
+```{r compute weights based on the matrix}
 
 column_sums <- colSums(criteriaWeightsPairwiseComparisons)
 
 # Divide each element by the sum of its column
 normalized_matrix <- sweep(criteriaWeightsPairwiseComparisons, 2, column_sums, FUN = "/")
-
-# Step 3: Calculate the weights
-# Calculate the average of each row
 weights <- rowMeans(normalized_matrix)
 
 # Output the weights
@@ -564,12 +644,11 @@ print(weights)
 
 ```
 
-```{r}
+```{r apply topsis operations}
 
 # reverse is min
 weights <- c(0.249, 0.114, 0.105, 0.098, 0.1909, 0.074, 0.033, 0.033, 0.102)
 criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max", "max")
-# positiveIdealSolutions <- c(0.17, 0.60, 0.70, 0, 0.50, 0.10, 0.14, 0.3,0.007)
 overall2 <- TOPSIS(performanceTable, weights, criteriaMinMax)
 AHP_TOPSIS <- data.frame(uniqueID = names(overall2), values = overall2) %>%  
   mutate(uniqueID = as.integer(uniqueID))
@@ -581,19 +660,41 @@ AHP_TOPSIS_toplot <- fishnet_nowater %>%
 ```
 
 
-```{r}
+```{r visualize ahp results}
 
-quantiles <- classIntervals(AHP_TOPSIS_toplot$values, n = 8, style = "quantile")
+quantiles <- classIntervals(AHP_TOPSIS_toplot$values, n = 6, style = "quantile")
 AHP_TOPSIS_toplot$quantile <- cut(AHP_TOPSIS_toplot$values, breaks = quantiles$brks, include.lowest = TRUE)
 
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=AHP_TOPSIS_toplot, color="black", aes(fill=quantile)) + scale_fill_brewer(palette = "RdBu")
+  geom_sf(data=AHP_TOPSIS_toplot, color="black", aes(fill=quantile)) + 
+  scale_fill_brewer(palette = "Blues") +
+  labs(title = "AHP Score", fill = "Bins") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
+  
 ```
 
-# Consistency Check 
+```{r save a version}
 
-```{r}
+st_write(AHP_TOPSIS_toplot, here("data", "derived", "AHP.geojson"), driver = "GeoJSON")
+
+```
+
+
+# Analyses
+
+## Average Rank
+
+```{r combine all ranks together}
 
 TOPSIS <- TOPSIS %>%
   mutate(topsis_rank = min_rank(desc(values)))
@@ -618,22 +719,42 @@ rank_compare <- WSM %>%
 
 ```
 
-We took the average rank among all methods
-We would like to find places in Philadelphia that are consistently ranked more suitable than other. 
 
-```{r}
+```{r save a version}
+
+st_write(rank_compare, here("data", "derived", "average_rank.geojson"), driver = "GeoJSON")
+
+```
+
+We took the average rank among all methods because we would like to find places in Philadelphia that are consistently ranked more suitable than other. 
+
+```{r visualize the average rank}
+
 rank_toplot <- fishnet_nowater %>% 
   left_join(rank_compare, by = "uniqueID")
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=rank_toplot, color="black", aes(fill=avg_rank))
+  geom_sf(data=rank_toplot, color="black", aes(fill=avg_rank)) +
+  labs(title = "Average Rank", fill = "Rank") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
+  
 ```
 
-# Further Analysis
+## Rank by Neighborhood
 
 We would like to see if some neighborhoods are more suitable than others overall. 
 
-```{r}
+```{r add neighborhood}
+
 neighborhood <- st_read(here("data", "raw", "PhillyPlanning_Neighborhoods", "PhillyPlanning_Neighborhoods.shp")) %>% st_transform('ESRI:102728') 
   
 
@@ -647,7 +768,7 @@ final <- fishnet_nowater %>%
 ```
 
 
-```{r}
+```{r neighborhood plot}
 
 final %>% 
   st_drop_geometry() %>% 
@@ -655,112 +776,109 @@ final %>%
   summarize(overall_rank = mean(avg_rank)) %>% 
   left_join(neighborhood, .,by = "NAME") %>% 
   ggplot()+
-  geom_sf(color="black", aes(fill=overall_rank))
+  geom_sf(color="black", aes(fill=overall_rank)) +
+  scale_fill_gradient(low = "red", high = "white") + # Changed this line
+  labs(title = "Neighborhood Rank", fill = "Rank") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
+  
   
 ```
-Distribution of differences in rank between different methods:
 
-Comparing across topsis, promethee, and weighted sum in ranking the alternatives:
-- All methods rank alternatives differently. 
-- The differences in rank between weighted sum and promethee method is the smallest. 
-- Comparing topsis to weighted sum method and the promethee method, rank reversal is definitely an issue. There are a few grids where TOPSIS significantly over-rank and/or under-rank grids. 
-- comparing self-assigned weight method with using the ahp, there are a lot of positive values, meaning that self-assigned weight has under-ranked sites than using the ahp. 
+## Compare MCDA Methods
 
+Comparing across TOPSIS, PROMETHEE, and weighted sum in ranking the alternatives by looking at the distribution of differences in the rank, we found that:
+1. The differences in rank between weighted sum and promethee method is the smallest. 
+2. TOPSIS is leading to rank reversal issues for some parts of Philadelphia. In other word, a few grids that were ranked of lower priority in PROMETHEE and WSM are ranked of much high priority in TOPSIS and vice versa. Closer examination of these grids reveal that they are located in the outskirt of Philadelphia, mainly industrial areas that use a lot of electricty power. TOPSIS assumes that criteria are independent of each other. When a new alternative is introduced or an existing one is removed, the distance to the ideal and negative-ideal solutions can change. The presence of extreme values (very high or very low) can significantly influence the ideal and negative-ideal solutions. MCDA is sensitive to the quality of our data. 
+3. Assign weights directly has under-ranked several sites than using the AHP. 
 
-```{r}
+```{r compare difference distribution}
 
 # if negative, it means that wsm over-rank topsis or promethee
 # if positive, it means that wsm under-rank topsis or promethee
 compare<- final %>% 
   mutate(wsm_topsis = wsm_rank - topsis_rank,
          wsm_promethee = wsm_rank - promethee_rank,
-         topsis_promethee = topsis_rank - promethee_rank) %>% 
-  mutate(compare_weight = topsis_rank - ahptopsis_rank)
+         promethee_topsis = promethee_rank - topsis_rank) %>% 
+  mutate(compare_weights = topsis_rank - ahptopsis_rank)
 
 compare %>% 
   st_drop_geometry() %>% 
-  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, topsis_promethee, compare_weight, NAME)) %>% 
-  pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "topsis_promethee", "compare_weight"),  
-               names_to = "variable",        # Name for the new 'variable' column
+  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, promethee_topsis, compare_weights, NAME)) %>% 
+  pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "promethee_topsis", "compare_weights"),  
+               names_to = "variable",        
                values_to = "value") %>% 
   ggplot(aes(x = value)) +
-  geom_histogram(binwidth = 10, fill = "blue", color = "black", alpha = 0.7) +
+  geom_histogram(binwidth = 10, color="#726DA8", alpha = 0.7) +
   labs(title = "Distribution of Differences in Rank Between Different Methods",
        x = "Difference",
        y = "Frequency") +
   theme_minimal() +
-  facet_wrap(~ variable)
+  facet_wrap(~ variable) +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
   
 
 ```
 
-Closer examinations reveal that for places where promethee and wsm both give a low rank, the outskirt of philadelpia, topsis give a higher rank and vice versa. TOPSIS can also be sensitive to the addition of new criteria. 
-
-When a new alternative is introduced or an existing one is removed, the distances to the ideal and negative-ideal solutions can change. The presence of extreme values (very high or very low) can significantly influence the ideal and negative-ideal solutions. Assues independence of criteria. 
 
 ```{r fig.height=14, fig.width=12}
 
 compare %>% 
-  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, topsis_promethee, compare_weight, NAME)) %>% 
-  pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "topsis_promethee", "compare_weight"),  
-               names_to = "variable",        # Name for the new 'variable' column
+  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, promethee_topsis, compare_weights, NAME)) %>% 
+  pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "promethee_topsis", "compare_weights"),  
+               names_to = "variable",       
                values_to = "value") %>% 
   ggplot() +
   geom_sf(aes(fill = value), color = "black") +
   scale_fill_distiller(palette = "RdBu", direction = 1, 
-                       name = "Sample Variable", 
+                       name = "Difference", 
                        na.value = "grey50") +
-  labs(title = "Map with Divergent Color Ramp") +
-  theme_minimal() +
-  facet_wrap(~ variable)
+  labs(title = "Ranking Difference") +
+  facet_wrap(~ variable) +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
+  
 
 ```
 
+WSM: easy to understand and implement, but assumes that criteria are independent of each other and ranking is highly dependent on the weights
 
-Comparing the MCDA Method
-WSM:
-- Easy to understand and implement. 
-- Only requires determining the weights. 
-- Assumes that criteria are linearly additive.
-- Results heavily depend on the assigned weights. 
+TOPSIS: easy to understand and implement and is more comprehensive than the simple WSM, but it also assumes that criteria are independent of each other, is sensitive to rank reveral issues, and requires additional input froms stakeholders to decide upon the positive and negative ideal scenario. 
 
-PROMETHEE:
-- Allows for detailed preference modeling with different preference function. 
-- Introduce some forms of pair-wise comparison between alternatives. 
-- Requires careful selection of preference functions and preference function, indifference threshold 
-- Computationally intensive
+PROMETHEE: the most robust statistical mode, but requires careful selection of preference functions and preference function, indifference threshold 
 
-TOPSIS:
-- Easy to understand and implement.
-- Assumes that the criteria are independent of each other
-- Suffer from reversal rank problem. 
-- Require deciding upon the positive and negative ideal scenario. 
-
-Comparing weighting Method
-AHP:
-- a structured approach that breaks complex decisions into manageable parts. 
-- pairwise comparison can be subjective and biased 
-- maintain consistency in comparison can be challenging. 
-
-
-Takeaways:
-
-1. Our study provided a spatially informed starting point to identify potential areas for new EVSE that contribute to Philadelphia's sustainable transportation goals. 
-
-2. Our study highlighted the challenges in agreeing on the input criteria and weighting scheme and that different weighting scheme could significantly alter the result. Considering multiple goals here, including equity,sustainable transportation, affordability, etc.,  what should be included and how important they are become important questions to consider.  
-
-3. There's no perfect decision making model. Methods that are more complicated and robust mathematically 1) requires more decision inputs, which is more time consuming on the stakeholder side and introduces more subjectivity 2) could be more computationally intensive, 3) less intuitive to non-experts. 
-
-4. The state of GIS model for decision making. We need to decide upon the best possible course of action for the future, often with incomplete information and competing/conflicting interests at stake. The best practice is to not rely on a single method in decision making. Beyond using MCDA models, it is essential to check the actual site condition before making final decisions. Note that there are things that spatial analysis cannot capture. 
-
-5. Our study have also highlighted several recurrent challenges in geospatial model for decision making. Specifically, the modifiable areal unit problem (MAUP) is a source of uncertainty, considering that out raw data all comes with different spatial unit and needs to be re-aggregated before proceed. In addition, ecological fallacy could be an issues as we are making inference about a small portion of the population using tract level statistics for the whole population.Moreover, errors and uncertainties may also arise when dealing with missing information, when we make assumptions/spatial interpolations about a neighboring grids' situation. 
-
-6. The use of a MCDM framework based on characterization of alternatives could inform short term choices considering known constraints and preferences. Moving forward, we would like to look for ways to bridge the gap between short term decision making and long-term planning in a context of rapidly changing projections regarding future states of EV usage/climate scenarios. We believe the innovation lies in developing a structured and replicable framework that can provide a model for other cities facing similar challenges. 
-
+AHP: breaks complex decisions into manageable part, but pairwise comparison can be subjective and biased  and that maintaining consistency in comparison can be challenging. 
 
 # Public Private Partnership
 
-```{r}
+We decide to find places in Philadelphia that is consistently ranked as more suitable for new EVSE among all MCDA models. Through consulting the output of our  site visits, various stakeholder meetings, and budget considerations, we selected one of those sites in South Philadelphia and proposed a public-private partnership model between Philadelphia’s OIT and local grocery stores to install and maintain the EVSEs. We subsequently conducted financial analyses for the cost and revenue of breakdowns and designed a phased implementation of EVSE infrastructure given the current site conditions. 
+
+```{r load acme locations}
 
 acme <- read.csv(here("data", "raw", "acme.csv")) %>% 
   st_as_sf(., coords = c("Longitude", "Latitude"), crs = 4326) %>% 
@@ -770,7 +888,7 @@ acme <- read.csv(here("data", "raw", "acme.csv")) %>%
 ```
 
 
-```{r}
+```{r leaflet plots}
 
 
 pal <- colorBin(palette = "Blues", # change the color palette here
@@ -818,7 +936,17 @@ leaflet <- final %>%
 leaflet
 ```
 
+# Takeaways
 
+GIS-based MCDA is a robust criteria based methodology that support multiple criteria and statistical models at once, which allows for more in-depth decision making in the planning field. 
+
+Our study demonstrate a spatially informed starting point to identify potential areas for new EVSE that contribute to Philadelphia's sustainable transportation goals. 
+
+However, our study also highlighted several challenges in using MCDA. This includes agreeing on the input criteria, the weighting schemes, and various other inputs required for MCDA models. Considering the number of goals for this particular decision, equity,sustainable transportation, affordability, etc.,  what should be included and how important they are become important questions to consider and would significantly alter the result. 
+
+In addition, we would like to point out that there's no perfect decision making model. Methods that are more comprehensive and robust mathematically 1) requires more decision inputs, which is more time consuming, introduces more inconsistencies from stakeholders, and introduces more subjectivity 2) could be more computationally intensive, 3) less intuitive to non-experts. The best practice is to not rely on a single method in decision making. Beyond using MCDA models, it is essential to check the actual site condition before making final decisions. Note that there are things that spatial analysis cannot capture.
+
+Moreoever, our study have also highlighted several recurrent challenges in geospatial model for decision making. Specifically, the modifiable areal unit problem (MAUP) is a source of uncertainty, considering that out raw data all comes with different spatial unit and needs to be re-aggregated before proceed. In addition, ecological fallacy could be an issues as we are making inference about a small portion of the population using tract level statistics for the whole population.Moreover, errors and uncertainties may also arise when dealing with missing information, when we make assumptions/spatial interpolations about a neighboring grids' situation.
 
 
 

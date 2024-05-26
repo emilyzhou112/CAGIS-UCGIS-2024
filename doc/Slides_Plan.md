@@ -5,7 +5,9 @@ It's an honor to be here and present this pilot study on GIS-based Multi-Criteri
 My name is Emily and I am a first year Masters in City Planning student studying smart cities at University of Pennsylvania's graduate school of design. 
 
 ## 2. Motivations
-I would like to start by talking about the motivations behind this study and GIS for planning in general: 
+I would like to start by talking about the motivations behind this work and GIS for smart cities planning in general. 
+Philadelphia 
+
 
 - Philadelphia has a number of initiatives to reduce emissions from vehicles and expand EV charging options. However, we still see a mismatch between the number of EVs and EV chargers available. 
 - Philadelphia’s Office of Innovation and Technology is grappling with how to equitably roll out and maintain Electric Vehicle Supply Equipment (EVSE). But there are a lot of concerns to address: 
