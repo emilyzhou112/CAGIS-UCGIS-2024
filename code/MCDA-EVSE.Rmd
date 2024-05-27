@@ -710,7 +710,6 @@ AHP_TOPSIS <- AHP_TOPSIS %>%
   mutate(ahptopsis_rank = min_rank(desc(values)))
 
 rank_compare <- WSM %>% 
-  st_drop_geometry() %>% 
   dplyr::select(c(uniqueID, wsm_rank)) %>% 
   left_join(., TOPSIS %>% dplyr::select(uniqueID, topsis_rank), by = "uniqueID") %>% 
   left_join(., PROMETHEE %>% dplyr::select(uniqueID, promethee_rank), by = "uniqueID") %>% 
@@ -821,7 +820,6 @@ compare %>%
   labs(title = "Distribution of Differences in Rank Between Different Methods",
        x = "Difference",
        y = "Frequency") +
-  theme_minimal() +
   facet_wrap(~ variable) +
   theme(axis.text.x=element_blank(),
         axis.text.y=element_blank(),

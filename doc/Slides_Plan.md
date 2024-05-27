@@ -7,11 +7,13 @@ My name is Emily and I am a first year Masters in City Planning student studying
 
 ## 2. Motivations
 
-I would like to start by talking about the motivations behind this work and GIS for smart cities planning in general.
+I would like to start by talking about the motivations behind this work:
 Philadelphia currently has a number of initiatives to reduce emissions from vehicles and expand EV charging options. However, we still see a mismatch between the number of registered EVs and the number of EV chargers available in the city.
 Philadelphia’s Office of Innovation and Technology is grappling with how to equitably roll out and maintain Electric Vehicle Supply Equipment (EVSE). But there are a lot of concerns to address.
 In particular, a city is not a smart city if the technology only serves some of its residents. How do we ensure that our solution benefits residents outside of the primary economic hubs in the city. Are there ways we can deploy EVSE so they do more and serve more people? How do we ensure that chargers stay functional all the time? How do we minimize the cost and maximize the benefits? How do we prioritize where to implement EVSEs first?
 Since the issue we are facing is complicated, with a lot of conflicting/competing interests at stake, and is geographic in nature, we adopted a GIS-based multi-criteria decision analysis to evaluate the suitablity of potential evse sites.
+
+Add two charts here...
 
 ## 3. Data
 
@@ -31,10 +33,10 @@ We implemented our study in R and developed a six-step solution approach that co
 
 ## 5. MCDA Method Used
 
-We have conducted four groups of multi-criteria decision analyses in our study:
+We conducted four groups of multi-criteria decision analyses in our study:
 
-1. Assign weights directly to the criteria and then use WSM, TOPSIS, and PROMETHEE to rank alternatives respectively and compare the results.
-2. Use AHP to conduct pair-wise comparison across criteria to prioritize their weights and followed by using TOPSIS to rank the results.
+1. For the first three groups, we assigned weights directly to the criteria and then use WSM, TOPSIS, and PROMETHEE to rank alternatives respectively and compare the results.
+2. For the remaining group, we used AHP to conduct pair-wise comparison across criteria to prioritize their weights and followed by using TOPSIS to rank the results.
 
 ## 6. Weighted Sum Method
 
@@ -52,7 +54,7 @@ The PROMETHEE is an outranking method that compares alternatives pairwise based 
 
 The AHP method involves making pairwise comparisons between groups of criterias, using a scale to express relative importance. It then synthesize these individual weights to produce a overall weight for each criteria.
 
-## 10. Comparison - Ranking
+## 10. Comparison - Ranking Results
 
 Comparing the rank that each method give to the same grid, we found that:
 
@@ -60,7 +62,7 @@ Comparing the rank that each method give to the same grid, we found that:
 2. TOPSIS is leading to rank reversal issues for some parts of Philadelphia. In other word, a few grids that were ranked of lower priority in PROMETHEE and WSM are ranked of much high priority in TOPSIS and vice versa. Closer examination of these grids reveal that they are located in the outskirt of Philadelphia, mainly industrial areas that use a lot of electricty power. TOPSIS assumes that criteria are independent of each other. When a new alternative is introduced or an existing one is removed, the distance to the ideal and negative-ideal solutions can change. The presence of extreme values (very high or very low) can significantly influence the ideal and negative-ideal solutions. MCDA is sensitive to the quality of our data.
 3. Assign weights directly has under-ranked several sites than using the AHP to calculate weights.
 
-## 11. Comparison - Method
+## 11. Comparison - MCDA Methods
 
 WSM: easy to understand and implement, but assumes that criteria are independent of each other and ranking is highly dependent on the weights
 TOPSIS: easy to understand and implement and is more comprehensive than the simple WSM, but it also assumes that criteria are independent of each other, is sensitive to rank reveral issues, and requires additional input froms stakeholders to decide upon the positive and negative ideal scenario.
