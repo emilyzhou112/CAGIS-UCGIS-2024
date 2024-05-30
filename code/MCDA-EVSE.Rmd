@@ -41,7 +41,7 @@ Multi-Criteria Decision Analysis, Analytic Hierarchy Process, Electric Vehicle S
 ```{r packages and processing environment}
 
 # list of packages required 
-packages = c("tidycensus", "tidyverse", "viridis", "FNN",  "dplyr", "sf", "classInt", "readr", "ggplot2", "here", "tmap", "SpatialAcc", "svDialogs", "MCDA", "nngeo", "leaflet")
+packages = c("tidycensus", "tidyverse", "viridis", "FNN",  "dplyr", "sf", "classInt", "readr", "ggplot2", "here", "tmap", "SpatialAcc", "svDialogs", "MCDA", "nngeo", "leaflet", "gghalves")
 
 # load and install required packages
 package.check <- lapply(
@@ -799,7 +799,7 @@ Comparing across TOPSIS, PROMETHEE, and weighted sum in ranking the alternatives
 2. TOPSIS is leading to rank reversal issues for some parts of Philadelphia. In other word, a few grids that were ranked of lower priority in PROMETHEE and WSM are ranked of much high priority in TOPSIS and vice versa. Closer examination of these grids reveal that they are located in the outskirt of Philadelphia, mainly industrial areas that use a lot of electricty power. TOPSIS assumes that criteria are independent of each other. When a new alternative is introduced or an existing one is removed, the distance to the ideal and negative-ideal solutions can change. The presence of extreme values (very high or very low) can significantly influence the ideal and negative-ideal solutions. MCDA is sensitive to the quality of our data. 
 3. Assign weights directly has under-ranked several sites than using the AHP. 
 
-```{r compare difference distribution}
+```{r compare difference distribution, fig.height=6, fig.width=10}
 
 # if negative, it means that wsm over-rank topsis or promethee
 # if positive, it means that wsm under-rank topsis or promethee
@@ -809,47 +809,113 @@ compare<- final %>%
          promethee_topsis = promethee_rank - topsis_rank) %>% 
   mutate(compare_weights = topsis_rank - ahptopsis_rank)
 
-compare %>% 
+custom_palette1 <- c("#B2BF95", "#80A676", "#88BFBF", "#7EA1BF")
+
+fig1 <- compare %>% 
   st_drop_geometry() %>% 
-  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, promethee_topsis, compare_weights, NAME)) %>% 
+  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, promethee_topsis, compare_weights, NAME)) %>%
   pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "promethee_topsis", "compare_weights"),  
                names_to = "variable",        
                values_to = "value") %>% 
   ggplot(aes(x = value)) +
-  geom_histogram(binwidth = 10, color="#726DA8", alpha = 0.7) +
+  geom_histogram(binwidth = 10, aes(fill = variable), alpha = 1) +
   labs(title = "Distribution of Differences in Rank Between Different Methods",
        x = "Difference",
        y = "Frequency") +
-  facet_wrap(~ variable) +
-  theme(axis.text.x=element_blank(),
-        axis.text.y=element_blank(),
+  facet_wrap(~ variable, labeller= labeller(variable = c(
+    `promethee_topsis` = "PROMETHEE  vs. TOPSIS ",
+    `wsm_topsis` = "WSM  vs. TOPSIS",
+    `wsm_promethee` = "WSM  vs. PROMETHEE",
+    `compare_weights` = "AHP and Directly Assign Weights"))) +
+  scale_fill_manual(values = custom_palette1) + 
+  theme(#axis.text.x=element_blank(),
+        #axis.text.y=element_blank(),
         axis.ticks =element_blank(),
         axis.title.x = element_blank(),
         axis.title.y = element_blank(),
         plot.subtitle = element_text(size = 9,face = "italic"),
         plot.title = element_text(size = 12, face = "bold"),
         panel.background = element_blank(),
-        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8),
+        legend.position = "none",  # Turn off the legend,
+        strip.text = element_text(size = 12)
         )
   
+ggsave("graph.png", fig1, width = 10, height = 6, dpi = 300)
+```
+
+
+```{r}
+
+my_sort <- c("promethee_topsis", "wsm_topsis", "wsm_promethee", "compare_weights")
+
+
+
+# Your data manipulation and ggplot code
+plot <- compare %>% 
+  st_drop_geometry() %>% 
+  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, promethee_topsis, compare_weights, NAME)) %>%
+  pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "promethee_topsis", "compare_weights"),  
+               names_to = "variable",        
+               values_to = "value") %>% 
+  ggplot(aes(x = as.numeric(factor(variable, levels = my_sort)))) +
+  geom_half_violin(aes(x = as.numeric(factor(variable, levels = my_sort)) + 0.1,
+                       y = value, fill = factor(variable, levels = my_sort)),
+                   side = 'r', scale = "width", cex = 0.8, lwd=0.3) +  
+  geom_boxplot(aes(x = as.numeric(factor(variable, levels = my_sort)) + 0.1,
+                   y = value, fill = factor(variable, levels = my_sort)),
+               outlier.colour = "black", width = 0.1, cex = 0.8, lwd=0.3, outlier.size=0.6) +  
+  geom_jitter(aes(x = as.numeric(factor(variable, levels = my_sort)) - 0.1,
+                  y = value, color = factor(variable, levels = my_sort)),
+              width = 0.1, size = 0.2, stroke = 0.8) +
+  scale_fill_manual(values = custom_palette1) + 
+  scale_color_manual(values = custom_palette1) +  
+  labs(title = "Distribution of Differences in Rank Between Different Methods",
+       x = "Method",
+       y = "Difference") +
+  theme(axis.text.x=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_blank(),
+        legend.position = "none",  
+        )
+
+# Print the plot
+print(plot)
+ggsave("boxplot.png", plot, width = 10, height = 6, dpi = 300)
+
 
 ```
 
 
-```{r fig.height=14, fig.width=12}
 
-compare %>% 
-  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, promethee_topsis, compare_weights, NAME)) %>% 
+
+```{r fig.height=7, fig.width=10}
+
+custom_palette2 <- c("#80A676", "white", "#7EA1BF")
+
+
+fig2 <- compare %>% 
+  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, promethee_topsis, compare_weights, NAME)) %>%
   pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "promethee_topsis", "compare_weights"),  
                names_to = "variable",       
                values_to = "value") %>% 
+  filter(variable == "promethee_topsis" | variable == "wsm_topsis") %>% 
   ggplot() +
-  geom_sf(aes(fill = value), color = "black") +
-  scale_fill_distiller(palette = "RdBu", direction = 1, 
-                       name = "Difference", 
-                       na.value = "grey50") +
-  labs(title = "Ranking Difference") +
-  facet_wrap(~ variable) +
+  geom_sf(aes(fill = value), color = "grey") +
+  labs(title = "Ranking Difference between TOPSIS and Other Approaches") +
+  facet_wrap(~ variable, labeller= labeller(variable = c(
+    `promethee_topsis` = "PROMETHEE  vs. TOPSIS ",
+    `wsm_topsis` = "WSM  vs. TOPSIS",
+    `wsm_promethee` = "WSM  vs. PROMETHEE",
+    `compare_weights` = "AHP and Directly Assign Weights"))) +
+  scale_fill_gradientn(colors = custom_palette2, 
+                       name = "Rank Difference", 
+                       na.value = "grey50") + 
   theme(axis.text.x=element_blank(),
         axis.text.y=element_blank(),
         axis.ticks =element_blank(),
@@ -857,10 +923,9 @@ compare %>%
         axis.title.y = element_blank(),
         plot.subtitle = element_text(size = 9,face = "italic"),
         plot.title = element_text(size = 12, face = "bold"),
-        panel.background = element_blank(),
-        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
-        )
+        panel.background = element_blank()    )
   
+ggsave("plot.png", fig2, width = 10, height = 6, dpi = 300)
 
 ```
 
@@ -888,8 +953,9 @@ acme <- read.csv(here("data", "raw", "acme.csv")) %>%
 
 ```{r leaflet plots}
 
+custom_palette <- c("#C4C4C4", "#B2BF95", "#80A676", "#88BFBF", "#7EA1BF")
 
-pal <- colorBin(palette = "Blues", # change the color palette here
+pal <- colorBin(palette = custom_palette, # change the color palette here
                 domain = final$avg_rank, # change the parameter name after $
                 bins = c(0, 200, 400, 600, 800, 1000, 1200)) # change the bins here 
 
@@ -903,7 +969,7 @@ labs <- paste0("<strong>", final$NAME,
                ) 
 
 labs_acme <- paste0("</strong><br/>ACME Address ", acme$Address)
-
+acme_marker_color <- "black"
 ```
 
 ```{r}
@@ -912,24 +978,32 @@ leaflet <- final %>%
   leaflet() %>%
   setView(lng = -75.1652, lat = 40.0126, zoom = 10.5) %>%
   addProviderTiles(providers$CartoDB.Positron) %>% 
-  addPolygons(weight = 1,
+  addPolygons(weight = 0.2,
+              color = "black", 
+              opacity = 0.5,
               fillColor = ~pal(avg_rank), # change the name of the parameter in the bracket
               popup = labs,
-              fillOpacity = 1) %>%
+              fillOpacity = 2) %>%
   addCircleMarkers(
     data = acme,  # Replace with your actual point data
     lng = ~longitude,  # Replace with the appropriate variable in your point dataset for longitude
     lat = ~latitude,  # Replace with the appropriate variable in your point dataset for latitude
     weight = 0.5,
     radius = 4,
-    fillColor = "red",  # Set the fill color for the markers
+    fillColor = "black",  # Set the fill color for the markers
     fillOpacity = 1,
     popup = ~labs_acme  # Replace with the appropriate variable in your point dataset for popup text
   ) %>% 
   addLegend(position = "bottomright",
             pal = pal,
             values = ~avg_rank, # change the name of the parameter after ~
-            title = "EVSE Suitability Rank") # change the name of the legend 
+            title = "EVSE Suitability Rank") %>% 
+  addControl(
+    html = paste0('<div style="background: white; padding: 2px; border-radius: 2px;">
+                    <i style="background:', acme_marker_color, '; width: 15px; height: 15px; display: inline-block; border-radius: 50%;"></i> ACME<br>
+                    </div>'),
+    position = "bottomright"
+  )
 
 leaflet
 ```
