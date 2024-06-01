@@ -1,11 +1,13 @@
-# A GIS-Based Multi-Criteria Decision Analysis for Electric Vehicle SUpply Equipment Deployment in Philadelphia
+# A GIS-Based Multi-Criteria Decision Analysis (MCDA) for Electric Vehicle Supply Equipment (EVSE) Deployment in Philadelphia
 
 Lighting talk presentation for [CaGIS-UCGIS](https://cartogis.org/conferences/cagis2024/) Joint Symposium 2024 at Columbus, OH
 
 June 5, 2024
 
-Authors: **Emily Zhou**, **Junyi Yang**, Gustell Preston, Avani Adhikari
+Authors: **Emily Zhou**, **Junyi Yang**, Gustell Preston, Avani Adhikari  
+
 Advisor: Dr. Allison Lassiter
+
 *Department of City and Regional Planning, Stuart Weitzman School of Design, University of Pennsylvania*
 
 ## Materials
