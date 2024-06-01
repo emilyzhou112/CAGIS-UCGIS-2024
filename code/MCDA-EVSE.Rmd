@@ -397,13 +397,15 @@ WSM <- fishnet_nowater %>%
 
 ```{r visualize weighted sum}
 
-quantiles <- classIntervals(WSM$score, n = 6, style = "quantile")
+custom_palette <- c("#C4C4C4", "#B2BF95", "#80A676", "#88BFBF", "#7EA1BF")
+
+quantiles <- classIntervals(WSM$score, n = 5, style = "quantile")
 WSM$quantile <- cut(WSM$score, breaks = quantiles$brks, include.lowest = TRUE)
 
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
   geom_sf(data=WSM, color="black", aes(fill=quantile)) + 
-  scale_fill_brewer(palette = "Blues") + 
+  scale_fill_manual(values = custom_palette) + 
   labs(title = "Weighted Sum Method Score", fill = "Bins") +
   theme(axis.text.x=element_blank(),
         axis.text.y=element_blank(),
@@ -662,13 +664,13 @@ AHP_TOPSIS_toplot <- fishnet_nowater %>%
 
 ```{r visualize ahp results}
 
-quantiles <- classIntervals(AHP_TOPSIS_toplot$values, n = 6, style = "quantile")
+quantiles <- classIntervals(AHP_TOPSIS_toplot$values, n = 5, style = "quantile")
 AHP_TOPSIS_toplot$quantile <- cut(AHP_TOPSIS_toplot$values, breaks = quantiles$brks, include.lowest = TRUE)
 
 ggplot()+
   geom_sf(data=fishnet, color="black", fill="white") +
   geom_sf(data=AHP_TOPSIS_toplot, color="black", aes(fill=quantile)) + 
-  scale_fill_brewer(palette = "Blues") +
+  scale_fill_manual(values = custom_palette) +
   labs(title = "AHP Score", fill = "Bins") +
   theme(axis.text.x=element_blank(),
         axis.text.y=element_blank(),
@@ -953,8 +955,6 @@ acme <- read.csv(here("data", "raw", "acme.csv")) %>%
 
 ```{r leaflet plots}
 
-custom_palette <- c("#C4C4C4", "#B2BF95", "#80A676", "#88BFBF", "#7EA1BF")
-
 pal <- colorBin(palette = custom_palette, # change the color palette here
                 domain = final$avg_rank, # change the parameter name after $
                 bins = c(0, 200, 400, 600, 800, 1000, 1200)) # change the bins here 
@@ -1018,7 +1018,7 @@ However, our study also highlighted several challenges in using MCDA. This inclu
 
 In addition, we would like to point out that there's no perfect decision making model. Methods that are more comprehensive and robust mathematically 1) requires more decision inputs, which is more time consuming, introduces more inconsistencies from stakeholders, and introduces more subjectivity 2) could be more computationally intensive, 3) less intuitive to non-experts. The best practice is to not rely on a single method in decision making. Beyond using MCDA models, it is essential to check the actual site condition before making final decisions. Note that there are things that spatial analysis cannot capture.
 
-Moreoever, our study have also highlighted several recurrent challenges in geospatial model for decision making. Specifically, the modifiable areal unit problem (MAUP) is a source of uncertainty, considering that out raw data all comes with different spatial unit and needs to be re-aggregated before proceed. In addition, ecological fallacy could be an issues as we are making inference about a small portion of the population using tract level statistics for the whole population.Moreover, errors and uncertainties may also arise when dealing with missing information, when we make assumptions/spatial interpolations about a neighboring grids' situation.
+Moreover, our study have also highlighted several recurrent challenges in geospatial model for decision making. Specifically, the modifiable areal unit problem (MAUP) is a source of uncertainty, considering that out raw data all comes with different spatial unit and needs to be re-aggregated before proceed. In addition, ecological fallacy could be an issues as we are making inference about a small portion of the population using tract level statistics for the whole population.Moreover, errors and uncertainties may also arise when dealing with missing information, when we make assumptions/spatial interpolations about a neighboring grids' situation.
 
 
 
