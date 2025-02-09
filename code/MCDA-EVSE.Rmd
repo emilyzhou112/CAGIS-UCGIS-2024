@@ -947,9 +947,194 @@ AHP: breaks complex decisions into manageable part, but pairwise comparison can 
 
 # Local MCDA Approach
 
-Start with `fishnet_nowater` data
+
+First, we want to state the difference between global and local MCDA. Both of them are crucial to decision-making in various ways. Global MCDA applies the same criteria weights and decision rules uniformly across the entire study area. It assumes that all areas have the same priorities and conditions for EVSE placement. However, it ignores local variations in socio-economic factors, infrastructure, or mobility behavior.
+
+Local MCDA, on the other hand, recognizes that different parts of the city have different needs, which is typical for decision-making in an urban context. It divides the city into meaningful clusters (based on urban form, population, mobility, etc.). Following this, it conducts MCDA within each cluster using localized weights or decision rules.
+
+Second, why is this important in Philadelphia? Philadelphia is a diverse city with distinct neighborhoods that vary in population density, transit reliance, socioeconomic conditions, and EV adoption. Applying a single set of MCDA weights citywide may not reflect neighborhood-specific needs. For example: Center City & University City: High density, transit-dependent, lower car ownership, meaning population density might be a more important criterion. Northeast Philadelphia: Lower density, higher car ownership, perhaps parking availability might be more important. In suburban areas: EV adoption rates might be more important.With local MCDA, we can ensure context-specific decision-making, which aligns better with urban planning priorities and policies.
+
+Third, at what scale should we implement local MCDA? In other words, what do we mean by "local"? This depends on the decision context and the spatial scale of the problem. There are many ways to solve the problem: census tract, neighborhoods, zip codes, etc. In our case, we chose a more systematic way to classify urban areas. We plan to first use PCA to reduce dimensionality by extracting key latent factors from the 9 variables. This also helps to remove redundancy (e.g., population density & driving population may be correlated). Then, we use k-means clustering to group similar grid cells into clusters based on the PCA-transformed data. This ensures that each cluster represents spatial areas with similar urban characteristics. Finally, we perform separate MCDA for each cluster, using different criteria weights. This allows us to capture local variations in EVSE suitability and make more informed decisions.
+
+Finally, we would also like to point out that doing so has its particular implications in terms of GIS application, planning, and policymaking. In terms of smart cities planning, having targeted EVSE deployment strategies for high-density vs. suburban areas can help optimize the use of limited resources and ensures that underserved communities receive fair access to EV. Considering global MCDA - it only draws attention to a particular part of the city, which while indeed in need of more EVSE, this might overlook the needs of other neighborhoods. A neighborhood ranked slighly lower in the global MCDA might still need a charging station, or even maybe ranked higher in the local MCDA. As for policymaking, doing so allows us to have cluster-specific incentives for EV adoption or charging subsidies.
 
 
+```{r pca for 9 criteria}
+
+# Start with fishnet_nowater dataset as the base layer (all criteria aggregated to the fishnet level)
+# perform pca analysis
+set.seed(123)
+pca_fishnet<- prcomp(fishnet_nowater %>% st_drop_geometry %>% select(-uniqueID), 
+                     center = TRUE, 
+                     scale. = TRUE)
+
+# loadings
+pca_loadings <- pca_fishnet$rotation
+
+# pc scores
+pc_scores <- as.data.frame(pca_fishnet$x)
+
+# combine dataframe
+fishnet_PCA <- cbind(uniqueID = fishnet_nowater$uniqueID, pc_scores)
+
+```
+
+```{r checking}
+
+# unit vector ? 
+pc1_norm <- sqrt(sum(pca_loadings[,1]^2))
+pc2_norm <- sqrt(sum(pca_loadings[,2]^2))
+
+print(pc1_norm)  # Should be close to 1
+print(pc2_norm)  # Should be close to 1
+
+# Compute the dot product
+options(digits = 3)
+options(scipen = 999)
+dot_product <- sum(pca_loadings[,1] * pca_loadings[,2])
+print(dot_product) 
+
+# any correlation?
+cor(pc_scores[, 1], pc_scores[, 2])
+
+```
+
+
+```{r pve plot}
+
+pve <- summary(pca_fishnet)$importance[2, ]  # Proportion of variance explained
+
+pve_df <- data.frame(
+  PC = seq_along(pve),  # Principal component number
+  PVE = pve             # Proportion of variance explained
+)
+
+ggplot(pve_df, aes(x = PC, y = PVE)) +
+  geom_line(color = "#6EA6C3", size = 1) +   # Blue connecting line
+  geom_point(size = 3, color = "#DC6D85") +  # Red points, similar to pch=16 in base R
+  theme(plot.subtitle = element_text(size = 12,face = "italic"),
+        plot.title = element_text(size = 15, face = "bold"), 
+        axis.text.x=element_text(size=8),
+        axis.text.y=element_text(size=8), 
+        axis.title=element_text(size=9), 
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, linewidth =0.8)) +
+  labs(title = "PVE Scree Plot of PCA with All 9 Variables",
+       x = "Number of PCs",
+       y = "Proportion of Variance Explained") +
+  scale_x_continuous(breaks = seq(1, length(pve), 1))  
+
+```
+
+
+```{r}
+
+pve_cumulative <- summary(pca_fishnet)$importance[3, ]  
+pve_cumulative
+
+```
+
+
+```{r biplot}
+
+library(ggbiplot)
+ggbiplot(pca_fishnet, 
+              choices = c(1, 2),  
+              obs.scale = 1, 
+              var.scale = 1, 
+              groups = rep("All Data", nrow(pca_fishnet$x)),  # Trick to color points
+              ellipse = FALSE,   
+              circle = FALSE) + 
+  scale_color_manual(values = c("#6EA6C3")) +  # Change dot color
+  theme(plot.subtitle = element_text(size = 12,face = "italic"),
+        plot.title = element_text(size = 15, face = "bold"), 
+        axis.text.x=element_text(size=8),
+        axis.text.y=element_text(size=8), 
+        axis.title=element_text(size=9), 
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, linewidth =0.8)) +
+  theme(plot.title = element_text(size = 15, face = "bold"),
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 12),
+        legend.position = "none") + 
+  labs(title = "PCA Biplot", 
+       x = "PC1 (First Principal Component)", 
+       y = "PC2 (Second Principal Component)")  + 
+  geom_hline(yintercept = 0, color = "grey", linewidth = 0.4) + 
+  geom_vline(xintercept = 0, color = "grey", linewidth = 0.4)
+```
+
+
+```{r}
+
+# let's use 4 pcs to summarize the overall variability 
+# what is an optimal number of clusters? 
+k.values <- 1:8
+fviz_nbclust(pc_scores[, 1:4], kmeans, method = "wss")
+
+```
+
+
+```{r}
+# let's double check the cluster
+# Compute the best number of clusters using 30 indices
+nb_result <- NbClust(pc_scores[, 1:4], distance = "euclidean", min.nc = 2, max.nc = 6, method = "kmeans")
+
+# Get the best number of clusters
+best_k <- nb_result$Best.nc[1]
+print(best_k)
+```
+
+
+```{r run k means}
+
+# since four clusters looks optimal, we will use k = 4
+# also we are using 4 PC, which explains 65% of variability 
+
+# run k-means
+kmeans_fishnet <- kmeans(pc_scores[, 1:4], centers = 4)
+
+# assign cluster
+fishnet_clustered <- data.frame(fishnet_PCA[, 1:4], Cluster = as.factor(kmeans_fishnet$cluster))
+
+# cluster number
+table(fishnet_clustered$Cluster)
+
+# combine with original fishnet data
+fishnet_clustered <- left_join(fishnet_clustered, fishnet, by = "uniqueID")
+```
+
+
+```{r}
+
+fishnet_clustered <- st_as_sf(fishnet_clustered)
+
+fishnet_clustered %>% 
+  ggplot() +
+  geom_sf(aes(fill = Cluster), color = "black") +
+  scale_fill_brewer(palette = "Set3") +
+  labs(title = "Clustered Fishnet") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
+
+```
+
+```{r}
+
+
+# figure out common features in a cluster?
+# bring in more variable information
+
+
+```
 
 
 
