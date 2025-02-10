@@ -954,7 +954,7 @@ Local MCDA, on the other hand, recognizes that different parts of the city have 
 
 Second, why is this important in Philadelphia? Philadelphia is a diverse city with distinct neighborhoods that vary in population density, transit reliance, socioeconomic conditions, and EV adoption. Applying a single set of MCDA weights citywide may not reflect neighborhood-specific needs. For example: Center City & University City: High density, transit-dependent, lower car ownership, meaning population density might be a more important criterion. Northeast Philadelphia: Lower density, higher car ownership, perhaps parking availability might be more important. In suburban areas: EV adoption rates might be more important.With local MCDA, we can ensure context-specific decision-making, which aligns better with urban planning priorities and policies.
 
-Third, at what scale should we implement local MCDA? In other words, what do we mean by "local"? This depends on the decision context and the spatial scale of the problem. There are many ways to solve the problem: census tract, neighborhoods, zip codes, etc. In our case, we chose a more systematic way to classify urban areas. We plan to first use PCA to reduce dimensionality by extracting key latent factors from the 9 variables. This also helps to remove redundancy (e.g., population density & driving population may be correlated). Then, we use k-means clustering to group similar grid cells into clusters based on the PCA-transformed data. This ensures that each cluster represents spatial areas with similar urban characteristics. Finally, we perform separate MCDA for each cluster, using different criteria weights. This allows us to capture local variations in EVSE suitability and make more informed decisions.
+Third, at what scale should we implement local MCDA? In other words, what do we mean by "local"? This depends on the decision context and the spatial scale of the problem. There are many ways to solve the problem: census tract, neighborhoods, zip codes, etc. In our case, we chose a more systematic way to classify urban areas. We plan to first use PCA to reduce dimensionality by extracting key latent factors from the 9 variables. This also helps to remove redundancy (e.g., population density & driving population may be correlated). Then, we use k-means clustering to group similar grid cells into clusters based on the PCA-transformed data. This ensures that each cluster represents spatial areas with similar urban characteristics. Finally, we perform separate MCDA for each cluster, using different criteria weights. This allows us to capture local variations in EVSE suitability and make more informed decisions. This is also called spectrum clustering, it clusters things better. 
 
 Finally, we would also like to point out that doing so has its particular implications in terms of GIS application, planning, and policymaking. In terms of smart cities planning, having targeted EVSE deployment strategies for high-density vs. suburban areas can help optimize the use of limited resources and ensures that underserved communities receive fair access to EV. Considering global MCDA - it only draws attention to a particular part of the city, which while indeed in need of more EVSE, this might overlook the needs of other neighborhoods. A neighborhood ranked slighly lower in the global MCDA might still need a charging station, or even maybe ranked higher in the local MCDA. As for policymaking, doing so allows us to have cluster-specific incentives for EV adoption or charging subsidies.
 
@@ -1064,6 +1064,32 @@ ggbiplot(pca_fishnet,
   geom_vline(xintercept = 0, color = "grey", linewidth = 0.4)
 ```
 
+```{r}
+## plot top 20 loadings
+top_k <- 5
+
+## get pc1 and pc2
+pc1 <- data.frame(loading = pca_fishnet$rotation[,1],
+                  var = rownames(pca_fishnet$rotation),
+                  pc = "PC1") 
+pc2 <- data.frame(loading = pca_fishnet$rotation[,2],
+                  var = rownames(pca_fishnet$rotation),
+                  pc = "PC2") 
+
+# get top_k loadings of pc1 and pc2
+pc1_top <- pc1 %>% arrange(-loading) %>% slice(1:top_k)
+pc2_top <- pc2 %>% arrange(-loading) %>% slice(1:top_k)
+
+rbind(pc1_top, pc2_top) %>%
+  ggplot(aes(x = reorder(var, -loading), y = loading)) +
+  geom_point() +
+  ggtitle("Top loadings") +
+  xlab("Gene") +
+  facet_wrap(~pc, nrow = 1, scales = "free_x") +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 1))
+```
+
 
 ```{r}
 
@@ -1101,12 +1127,13 @@ fishnet_clustered <- data.frame(fishnet_PCA[, 1:4], Cluster = as.factor(kmeans_f
 table(fishnet_clustered$Cluster)
 
 # combine with original fishnet data
-fishnet_clustered <- left_join(fishnet_clustered, fishnet, by = "uniqueID")
+fishnet_clustered <- left_join(fishnet_clustered, fishnet_nowater, by = "uniqueID")
 ```
 
 
 ```{r}
 
+#  4 clusters with 4 PCs
 fishnet_clustered <- st_as_sf(fishnet_clustered)
 
 fishnet_clustered %>% 
@@ -1127,16 +1154,149 @@ fishnet_clustered %>%
 
 ```
 
-```{r}
+```{r cluster summary}
 
 
 # figure out common features in a cluster?
-# bring in more variable information
+# what are the commonalities within the cluster? 
 
+cluster_summary <- fishnet_clustered %>%
+  group_by(Cluster) %>%
+  dplyr::summarize(
+    avg_density = mean(density, na.rm = TRUE),
+    avg_driving_pop = mean(driving_pop, na.rm = TRUE),
+    avg_evse_nn = mean(evse.nn, na.rm = TRUE),
+    avg_TSFCA = mean(TSFCA, na.rm = TRUE),
+    avg_elec_cnt = mean(elec_cnt, na.rm = TRUE),
+    avg_parking_nn = mean(parking.nn, na.rm = TRUE),
+    avg_police_fire = mean(policefire.nn, na.rm = TRUE),
+    avg_zoning = mean(zone_score, na.rm = TRUE),
+    avg_electric_use = mean(elect_use, na.rm = TRUE),
+    count = n()  # Number of grid cells in each cluster
+  )
+
+cluster_summary 
+```
+
+From here, we can see that each cluster has different characteristics. For example, Cluster 1 has the highest average population density, driving population, registered EV, are more accessible to existing EVSE, and have more parking spaces nearby. 
+
+Cluster 4 also has high population density, and more than half of the population are in driving age. It has a fair number of registered electric vehicle, electric power usage is huge. Accessibility to the existing EVSE is low. 
+
+Cluster 3 has moderate population density, but also more than half of the population are in driving age. It has a lot of registered electric vehicle, but accessibility to EVSE is low. 
+
+Cluster 2 has low density and driving age population, but does have electric vehicle registration.
+
+Looking at the map and based on our knowledge about Philadelphia, cluster 1 is likely to be Center City and University City, cluster 4 is likely to be Northeast Philadelphia and west Philadelphia, cluster 2 and 3 are both surban area, but cluster 3 is likely to be more affluent area while cluster 2 covers a lot of industrial area.
+
+
+```{r}
+
+ggplot(fishnet_clustered, aes(x = PC1, y = PC2, color = Cluster)) +
+  geom_point() +
+  labs(title = "Cluster Separation in PCA Space", x = "PC1", y = "PC2") +
+  theme_bw() +
+  theme(plot.subtitle = element_text(size = 12,face = "italic"),
+        plot.title = element_text(size = 15, face = "bold"), 
+        axis.text.x=element_text(size=8),
+        axis.text.y=element_text(size=8), 
+        axis.title=element_text(size=9), 
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, linewidth =0.8))
+```
+
+```{r}
+
+fishnet_clustered %>%
+  st_drop_geometry() %>%
+  dplyr::select(Cluster, driving_pop, evse.nn, elec_cnt, parking.nn) %>%
+  mutate(
+         evse.nn = scale_values(evse.nn),
+         driving_pop = scale_values(driving_pop),
+         elec_cnt = scale_values(elec_cnt),
+         parking.nn= scale_values(parking.nn)
+         ) %>% 
+  pivot_longer(cols = -Cluster, names_to = "Variable", values_to = "Scaled_Value") %>% 
+  ggplot(., aes(x = as.factor(Cluster), y = Scaled_Value, fill = as.factor(Cluster))) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_brewer(palette = "Set3") +
+  facet_wrap(~Variable, scales = "free_y") +  # Facet by variable
+  labs(
+    title = "Distribution of Scaled Criteria by Cluster",
+    x = "Cluster",
+    y = "Scaled Value (0-1)",
+    fill = "Cluster"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text.x = element_text(size = 10),
+    legend.position = "none",  # Remove legend since colors already represent clusters
+    strip.text = element_text(size = 11, face = "bold")  # Styling facet labels
+  )
+```
+
+
+Now we need to separate the fishnet data into 4 clusters based on the PCA-transformed data. We will then conduct MCDA for each cluster separately. This allows us to capture local variations in EVSE suitability and make more informed decisions. 
+
+```{r separate cluster}
+
+# separate fishnet data into 4 clusters
+cluster1 <- fishnet_clustered %>% filter(Cluster == 1)
+cluster2 <- fishnet_clustered %>% filter(Cluster == 2)
+cluster3 <- fishnet_clustered %>% filter(Cluster == 3)
+cluster4 <- fishnet_clustered %>% filter(Cluster == 4)
+
+```
+
+We will use the TOPSIS method to test out the local MCDA model
+
+1. Construct the decision matrix where each element represents the performance score of each alternatives.
+2. Normalization
+3. Determine the ideal and negative ideal solution. In other words, the best and worst possible value for each criterion. 
+4. Calculate the separation measure as in euclidean distance calculation. 
+5. Measure relative closeness: how close each alternative is to the ideal solution relative to its distance from the negative-ideal solution. 
+6. Ranking 
+
+```{r construct performance table for local MCDA}
+
+performanceTable <- fishnet_nowater %>% 
+  dplyr::select(-c(uniqueID)) %>% 
+  st_drop_geometry() %>% 
+  mutate(density = scale_values(density),
+         TSFCA = scale_values(TSFCA),
+         driving_pop = scale_values(driving_pop),
+         evse.nn = scale_values(evse.nn),
+         elec_cnt = scale_values(elec_cnt),
+         parking.nn = scale_values(parking.nn),
+         policefire.nn = scale_values(policefire.nn),
+         elect_use = scale_values(elect_use)
+         )
+uniqueIDs <- fishnet_nowater$uniqueID
+rownames(performanceTable) <- uniqueIDs
+```
+
+
+
+```{r local topsis operations}
+
+# mutate(score = 0.12*scl_density + 0.18*scl_evse_re + 0.15*scl_elec + 0.1*scl_drivingpop + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.12*scl_acc_re +0.13*scl_elect_use) # self assign weight
+
+# we need one set for each cluster
+# reverse is min 
+weights <- c(0.18, 0.12, 0.1, 0.12, 0.15, 0.1, 0.05, 0.05, 0.13)
+criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max", "max")
+overall1 <- TOPSIS(performanceTable, weights, criteriaMinMax)
+TOPSIS <- data.frame(uniqueID = names(overall1), values = overall1) %>%  
+  mutate(uniqueID = as.integer(uniqueID))
+  
+TOPSIS_toplot <- fishnet_nowater %>% 
+  left_join(TOPSIS, by = "uniqueID")
 
 ```
 
 
+we need to find a way to summarize the result of the local MCDA within each cluster.Probably the percentile rank of each grid cell within each cluster, compared to their average percentile rank in the entire city using global MCDA. 
 
 # Public Private Partnership
 
