@@ -1178,16 +1178,6 @@ cluster_summary <- fishnet_clustered %>%
 cluster_summary 
 ```
 
-From here, we can see that each cluster has different characteristics. For example, Cluster 1 has the highest average population density, driving population, registered EV, are more accessible to existing EVSE, and have more parking spaces nearby. 
-
-Cluster 4 also has high population density, and more than half of the population are in driving age. It has a fair number of registered electric vehicle, electric power usage is huge. Accessibility to the existing EVSE is low. 
-
-Cluster 3 has moderate population density, but also more than half of the population are in driving age. It has a lot of registered electric vehicle, but accessibility to EVSE is low. 
-
-Cluster 2 has low density and driving age population, but does have electric vehicle registration.
-
-Looking at the map and based on our knowledge about Philadelphia, cluster 1 is likely to be Center City and University City, cluster 4 is likely to be Northeast Philadelphia and west Philadelphia, cluster 2 and 3 are both surban area, but cluster 3 is likely to be more affluent area while cluster 2 covers a lot of industrial area.
-
 
 ```{r}
 
@@ -1217,6 +1207,7 @@ fishnet_clustered %>%
          ) %>% 
   pivot_longer(cols = -Cluster, names_to = "Variable", values_to = "Scaled_Value") %>% 
   ggplot(., aes(x = as.factor(Cluster), y = Scaled_Value, fill = as.factor(Cluster))) +
+  geom_violin(trim = FALSE, size = 0.4)+
   geom_boxplot(alpha = 0.7) +
   scale_fill_brewer(palette = "Set3") +
   facet_wrap(~Variable, scales = "free_y") +  # Facet by variable
@@ -1249,19 +1240,34 @@ cluster4 <- fishnet_clustered %>% filter(Cluster == 4)
 
 ```
 
+Cluster 1 has the highest average population density, driving population, registered EV, are more accessible to existing EVSE, and have more parking spaces nearby, more commercial space. Grids that fall into this cluster are mostly in Center City and University City.
+
+Cluster 2 has low population density and driving age population, but does have some existing EVSE and electric vehicle registration, most of these places are industrial area that consumes high electricity power. Grids that fall into this cluster are mostly suburbs in Northeast Philadelphia and South Philadelphia, a lot of those are in close proximity to industrial area and the airport. 
+
+Cluster 3 has moderate population density, but more than half of those are in driving age. It is also in the suburb area, but the more affluent area in northwestern Philadelphia like Chestnut Hill where people commute by car. Distance to EVSE is far with low accessibility, but a significant of them have electric vehicle. Also most grids are far from any existing parking lot. Most of those are residential area. Also uses a lot of electricity. 
+
+Cluster 4 also has high population density, and more than half of the population are in driving age. It has a fair number of registered electric vehicle and are mostly residential area. However, accessibility to the existing EVSE is low and mostly are residential area. These are the socio-economically disadvantaged area of Philadelphia, like Kensington, and North Philadelphia. 
+
+That said, from a policymaking aspect, the weight we place on each criterion should be different for each cluster. 
+
+According to the city of Philadelphia and the original conceptualization of the plan, we need to find places to implement new EVSE where there's a large potential demand (densely populated, high driving age population, and high registered EV) but low current accessibility; where there is existing parking location to use, high electricity usage to support the EVSE, and where the neighborhood is safe and suitable for EVSE installation. Among those, prioritize commercial and residential areas. 
+
+Currently, for global MCDA we assigned 0.12 weight to population density, **0.18 to existing EVSE proximity**, **0.15 to registered EVs**, **0.1 to percentage of driving age population**, **0.1 to parking spot proximity**, 0.05 to neighborhood safety score, 0.05 to zoning suitability, 0.12 to EVSE  accessibility, and 0.13 to electricity usage. 
+
+In Cluster 1
+- high demand for EVSE as justified by its population density, high driving-age population, high registered EVs, and many commercial area
+- lower need for new parking spots: More existing infrastructure, so parking spot availability may be less critical.
+
+In Cluster 2
+.... continue
+
 We will use the TOPSIS method to test out the local MCDA model
 
-1. Construct the decision matrix where each element represents the performance score of each alternatives.
-2. Normalization
-3. Determine the ideal and negative ideal solution. In other words, the best and worst possible value for each criterion. 
-4. Calculate the separation measure as in euclidean distance calculation. 
-5. Measure relative closeness: how close each alternative is to the ideal solution relative to its distance from the negative-ideal solution. 
-6. Ranking 
 
 ```{r construct performance table for local MCDA}
 
-performanceTable <- fishnet_nowater %>% 
-  dplyr::select(-c(uniqueID)) %>% 
+performanceTable_c1 <- cluster1 %>% 
+  dplyr::select(-c(uniqueID, Cluster, PC1, PC2, PC3)) %>% 
   st_drop_geometry() %>% 
   mutate(density = scale_values(density),
          TSFCA = scale_values(TSFCA),
@@ -1272,31 +1278,59 @@ performanceTable <- fishnet_nowater %>%
          policefire.nn = scale_values(policefire.nn),
          elect_use = scale_values(elect_use)
          )
-uniqueIDs <- fishnet_nowater$uniqueID
-rownames(performanceTable) <- uniqueIDs
+uniqueIDs_c1 <- cluster1$uniqueID
+rownames(performanceTable_c1) <- uniqueIDs_c1
+
+# repeate for cluster 2, 3, 4
 ```
 
 
 
 ```{r local topsis operations}
 
-# mutate(score = 0.12*scl_density + 0.18*scl_evse_re + 0.15*scl_elec + 0.1*scl_drivingpop + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.12*scl_acc_re +0.13*scl_elect_use) # self assign weight
 
 # we need one set for each cluster
 # reverse is min 
-weights <- c(0.18, 0.12, 0.1, 0.12, 0.15, 0.1, 0.05, 0.05, 0.13)
+# this is for cluster 1
+weights_c1 <- c(0.12, 0.14, 0.12, 0.16, 0.16, 0.08, 0.06, 0.06, 0.10)
 criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max", "max")
-overall1 <- TOPSIS(performanceTable, weights, criteriaMinMax)
-TOPSIS <- data.frame(uniqueID = names(overall1), values = overall1) %>%  
-  mutate(uniqueID = as.integer(uniqueID))
+overall_c1 <- TOPSIS(performanceTable_c1, weights, criteriaMinMax)
+TOPSIS_c1 <- data.frame(uniqueID = names(overall_c1), values = overall_c1) %>%  
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  mutate(topsis_rank_c1 = rank(values),
+         topsis_percentile_c1 = percent_rank(topsis_rank_c1) * 100)
   
-TOPSIS_toplot <- fishnet_nowater %>% 
-  left_join(TOPSIS, by = "uniqueID")
+
 
 ```
 
 
 we need to find a way to summarize the result of the local MCDA within each cluster.Probably the percentile rank of each grid cell within each cluster, compared to their average percentile rank in the entire city using global MCDA. 
+
+```{r}
+
+# Get the original rank and compute percentile rank 
+# then join it with the result from local MCDA
+# to compare whether the percentile rank is higher or lower than the global MCDA
+final_percentile <- final %>% 
+  dplyr::select(NAME, uniqueID, avg_rank, topsis_rank) %>%
+  mutate(
+    avg_percentile = percent_rank(avg_rank) * 100,
+    topsis_percentile = percent_rank(topsis_rank) * 100)
+  
+
+
+
+```
+
+
+```{r}
+# quick check
+TOPSIS_c1 %>% 
+  left_join(final, by = "uniqueID") %>%
+  dplyr::select(uniqueID, NAME, topsis_rank_c1, topsis_percentile_c1, topsis_rank, topsis_percentile)
+```
+
 
 # Public Private Partnership
 
