@@ -952,7 +952,8 @@ First, we want to state the difference between global and local MCDA. Both of th
 
 Local MCDA, on the other hand, recognizes that different parts of the city have different needs, which is typical for decision-making in an urban context. It divides the city into meaningful clusters (based on urban form, population, mobility, etc.). Following this, it conducts MCDA within each cluster using localized weights or decision rules.
 
-Second, why is this important in Philadelphia? Philadelphia is a diverse city with distinct neighborhoods that vary in population density, transit reliance, socioeconomic conditions, and EV adoption. Applying a single set of MCDA weights citywide may not reflect neighborhood-specific needs. For example: Center City & University City: High density, transit-dependent, lower car ownership, meaning population density might be a more important criterion. Northeast Philadelphia: Lower density, higher car ownership, perhaps parking availability might be more important. In suburban areas: EV adoption rates might be more important.With local MCDA, we can ensure context-specific decision-making, which aligns better with urban planning priorities and policies.
+Second, why is this important in Philadelphia? Philadelphia is a diverse city with distinct neighborhoods that vary in population density, transit reliance, socioeconomic conditions, and EV adoption. Applying a single set of MCDA weights citywide may not reflect neighborhood-specific needs. For example: Center City & University City: High density, transit-dependent, lower car ownership, meaning population density might be a more important criterion. Northeast Philadelphia: Lower density, higher car ownership, perhaps parking availability might be more important. In suburban areas: EV adoption rates might be more important.With local MCDA, we can ensure context-specific decision-making, which aligns better with urban planning priorities and policies. If we could separate the city into different clusters based on the conditions of the criteria we have, then drawing on our local knowledges, we would be able to assign different weights to different criteria for each cluster. This would allow us to better reflect the local conditions and priorities of each area. 
+
 
 Third, at what scale should we implement local MCDA? In other words, what do we mean by "local"? This depends on the decision context and the spatial scale of the problem. There are many ways to solve the problem: census tract, neighborhoods, zip codes, etc. In our case, we chose a more systematic way to classify urban areas. We plan to first use PCA to reduce dimensionality by extracting key latent factors from the 9 variables. This also helps to remove redundancy (e.g., population density & driving population may be correlated). Then, we use k-means clustering to group similar grid cells into clusters based on the PCA-transformed data. This ensures that each cluster represents spatial areas with similar urban characteristics. Finally, we perform separate MCDA for each cluster, using different criteria weights. This allows us to capture local variations in EVSE suitability and make more informed decisions. This is also called spectrum clustering, it clusters things better. 
 
@@ -1254,18 +1255,40 @@ According to the city of Philadelphia and the original conceptualization of the 
 
 Currently, for global MCDA we assigned 0.12 weight to population density, **0.18 to existing EVSE proximity**, **0.15 to registered EVs**, **0.1 to percentage of driving age population**, **0.1 to parking spot proximity**, 0.05 to neighborhood safety score, 0.05 to zoning suitability, 0.12 to EVSE  accessibility, and 0.13 to electricity usage. 
 
-In Cluster 1
+In Cluster 1 (Dense Urban Core)
 - high demand for EVSE as justified by its population density, high driving-age population, high registered EVs, and many commercial area
 - lower need for new parking spots: More existing infrastructure, so parking spot availability may be less critical.
+- Priority: Address accessibility gaps and leverage high demand.
 
-In Cluster 2
-.... continue
 
-We will use the TOPSIS method to test out the local MCDA model
+In Cluster 2 (Industrial & High Power Consumption Area)
+- low demand for EVSE as justified by its low population density, low driving-age population, and low registered EVs. existing EVSE and EV ownership present but not as high as Cluster 1. 
+- high power consumption can support EVSE
+- Priority: Focus on leveraging high electricity availability and industrial parking for EVSE deployment.
+
+
+In Cluster 3 (Affluent Residential Suburb)
+- moderate demand for EVSE as justified by its moderate population density, but high driving-age population and many EV owners. 
+- low existing EVSE accessibility and public parking spot availability
+- Priority: Expand EVSE infrastructure due to high EV ownership but poor accessibility.
+
+In Cluster 4 (Disadvantaged Residential Areas)
+- High demand but poor accessibility: High population & driving-age population but few EVSE options.
+- Socio-economic considerations: EV adoption is still growing, but accessibility should be prioritized.
+- More parking limitations and infrastructure concerns.
+
+We acknowledge that there's subjectivity involved in assigning weights to each criterion. But the goal here is not to be perfect on the weights but to understand how the outcomes can be different when we apply different weights and when we consider local variations. 
+
+
+We will use the TOPSIS method to test out the local MCDA model, since TOPSIS was one of the methods used in global MCDA. Running WSM and PROMETHEE locally would introduce more layers of variation, making it harder to isolate the impact of local weight adjustments versus methodological differences. 
+Also, TOPSIS avoids WSM's linearity issue. WSM is purely additive, meaning it treats all weighted values as independent and does not consider how alternatives compare to an ideal or worst-case scenario.This can be problematic in localized MCDA where extreme values may exist (e.g., a cluster with very high EV ownership but poor accessibility).
+PROMETHEE is a pairwise ranking method, meaning it compares each alternative to every other alternative, which can introduce ranking biases when dealing with smaller, more homogeneous clusters.TOPSIS is computationally less expensive than PROMETHEE, making it easier to run on multiple clusters without excessive processing time.
+
 
 
 ```{r construct performance table for local MCDA}
 
+# cluster 1
 performanceTable_c1 <- cluster1 %>% 
   dplyr::select(-c(uniqueID, Cluster, PC1, PC2, PC3)) %>% 
   st_drop_geometry() %>% 
@@ -1281,7 +1304,56 @@ performanceTable_c1 <- cluster1 %>%
 uniqueIDs_c1 <- cluster1$uniqueID
 rownames(performanceTable_c1) <- uniqueIDs_c1
 
-# repeate for cluster 2, 3, 4
+# cluster 2 
+performanceTable_c2 <- cluster2 %>% 
+  dplyr::select(-c(uniqueID, Cluster, PC1, PC2, PC3)) %>% 
+  st_drop_geometry() %>% 
+  mutate(density = scale_values(density),
+         TSFCA = scale_values(TSFCA),
+         driving_pop = scale_values(driving_pop),
+         evse.nn = scale_values(evse.nn),
+         elec_cnt = scale_values(elec_cnt),
+         parking.nn = scale_values(parking.nn),
+         policefire.nn = scale_values(policefire.nn),
+         elect_use = scale_values(elect_use)
+         )
+uniqueIDs_c2 <- cluster2$uniqueID
+rownames(performanceTable_c2) <- uniqueIDs_c2
+
+
+# cluster 3 
+performanceTable_c3 <- cluster3 %>% 
+  dplyr::select(-c(uniqueID, Cluster, PC1, PC2, PC3)) %>% 
+  st_drop_geometry() %>% 
+  mutate(density = scale_values(density),
+         TSFCA = scale_values(TSFCA),
+         driving_pop = scale_values(driving_pop),
+         evse.nn = scale_values(evse.nn),
+         elec_cnt = scale_values(elec_cnt),
+         parking.nn = scale_values(parking.nn),
+         policefire.nn = scale_values(policefire.nn),
+         elect_use = scale_values(elect_use)
+         )
+uniqueIDs_c3 <- cluster3$uniqueID
+rownames(performanceTable_c3) <- uniqueIDs_c3
+
+# cluster 4
+performanceTable_c4 <- cluster4 %>% 
+  dplyr::select(-c(uniqueID, Cluster, PC1, PC2, PC3)) %>% 
+  st_drop_geometry() %>% 
+  mutate(density = scale_values(density),
+         TSFCA = scale_values(TSFCA),
+         driving_pop = scale_values(driving_pop),
+         evse.nn = scale_values(evse.nn),
+         elec_cnt = scale_values(elec_cnt),
+         parking.nn = scale_values(parking.nn),
+         policefire.nn = scale_values(policefire.nn),
+         elect_use = scale_values(elect_use)
+         )
+uniqueIDs_c4 <- cluster4$uniqueID
+rownames(performanceTable_c4) <- uniqueIDs_c4
+
+
 ```
 
 
@@ -1291,45 +1363,277 @@ rownames(performanceTable_c1) <- uniqueIDs_c1
 
 # we need one set for each cluster
 # reverse is min 
-# this is for cluster 1
+# by order, this is evse.nn, density, driving_pop, TSFCA, elec_cnt, parking.nn, policefire.nn, zone score, elect_use
+weights_original <- c(0.18, 0.12, 0.1, 0.12, 0.15, 0.1, 0.05, 0.05, 0.13)
 weights_c1 <- c(0.12, 0.14, 0.12, 0.16, 0.16, 0.08, 0.06, 0.06, 0.10)
+weights_c2 <- c(0.14, 0.08, 0.08, 0.10, 0.12, 0.12, 0.06, 0.10, 0.20)
+weights_c3 <- c(0.20, 0.10, 0.12, 0.14, 0.18, 0.06, 0.06, 0.06, 0.08)
+weights_c4 <- c(0.16, 0.14, 0.12, 0.18, 0.12, 0.08, 0.04, 0.06, 0.10)
+
+names(weights_c1) <- colnames(performanceTable_c1)
+names(criteriaMinMax) <- colnames(performanceTable_c1)
+names(weights_c4) <- colnames(performanceTable_c4)
+names(criteriaMinMax) <- colnames(performanceTable_c4)
+
+# check total 
+sum(weights_c1)  # Should be 1
+sum(weights_c2)  # Should be 1
+sum(weights_c3)  # Should be 1
+sum(weights_c4)  # Should be 1
+
 criteriaMinMax <- c("min", "max", "max", "min", "max", "min", "min", "max", "max")
-overall_c1 <- TOPSIS(performanceTable_c1, weights, criteriaMinMax)
+
+## cluster 1
+overall_c1 <- TOPSIS(performanceTable_c1, weights_c1, criteriaMinMax)
 TOPSIS_c1 <- data.frame(uniqueID = names(overall_c1), values = overall_c1) %>%  
   mutate(uniqueID = as.integer(uniqueID)) %>% 
   mutate(topsis_rank_c1 = rank(values),
          topsis_percentile_c1 = percent_rank(topsis_rank_c1) * 100)
-  
 
+# test for original
+overall_c1_org <- TOPSIS(performanceTable_c1, weights_original, criteriaMinMax)
+TOPSIS_c1_org <- data.frame(uniqueID = names(overall_c1_org), values = overall_c1_org) %>%  
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  mutate(topsis_rank_c1_org = rank(values),
+         topsis_percentile_c1_org = percent_rank(topsis_rank_c1_org) * 100)
+
+## cluster 2
+overall_c2 <- TOPSIS(performanceTable_c2, weights_c2, criteriaMinMax)
+TOPSIS_c2 <- data.frame(uniqueID = names(overall_c2), values = overall_c2) %>%  
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  mutate(topsis_rank_c2 = rank(values),
+         topsis_percentile_c2 = percent_rank(topsis_rank_c2) * 100)
+
+# test for original
+overall_c2_org <- TOPSIS(performanceTable_c2, weights_original, criteriaMinMax)
+TOPSIS_c2_org <- data.frame(uniqueID = names(overall_c2_org), values = overall_c2_org) %>%  
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  mutate(topsis_rank_c2_org = rank(values),
+         topsis_percentile_c2_org = percent_rank(topsis_rank_c2_org) * 100)
+
+## cluster 3
+overall_c3 <- TOPSIS(performanceTable_c3, weights_c3, criteriaMinMax)
+TOPSIS_c3 <- data.frame(uniqueID = names(overall_c3), values = overall_c3) %>%  
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  mutate(topsis_rank_c3 = rank(values),
+         topsis_percentile_c3 = percent_rank(topsis_rank_c3) * 100)
+
+# test for original
+overall_c3_org <- TOPSIS(performanceTable_c3, weights_original, criteriaMinMax)
+TOPSIS_c3_org <- data.frame(uniqueID = names(overall_c3_org), values = overall_c3_org) %>%  
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  mutate(topsis_rank_c3_org = rank(values),
+         topsis_percentile_c3_org = percent_rank(topsis_rank_c3_org) * 100)
+
+## cluster 4
+overall_c4 <- TOPSIS(performanceTable_c4, weights_c4, criteriaMinMax)
+TOPSIS_c4 <- data.frame(uniqueID = names(overall_c4), values = overall_c4) %>%  
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  mutate(topsis_rank_c4 = rank(values),
+         topsis_percentile_c4 = percent_rank(topsis_rank_c4) * 100)
+
+# test for original
+overall_c4_org <- TOPSIS(performanceTable_c4, weights_original, criteriaMinMax)
+TOPSIS_c4_org <- data.frame(uniqueID = names(overall_c4_org), values = overall_c4_org) %>%  
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  mutate(topsis_rank_c4_org = rank(values),
+         topsis_percentile_c4_org = percent_rank(topsis_rank_c4_org) * 100)
 
 ```
 
+We ran the TOPSIS MCDA method. We computed the local rank as well as rank percentile for each cluster using local weights and the original global weights respectively. We compared that to the percentile of global rank using TOPSIS as well as the average global rank percentile. 
 
-we need to find a way to summarize the result of the local MCDA within each cluster.Probably the percentile rank of each grid cell within each cluster, compared to their average percentile rank in the entire city using global MCDA. 
+Comparing local vs. global TOPSIS reveals how rankings shift due to local conditions.
+Comparing local TOPSIS to global average MCDA checks if local patterns align with broader decision-making trends.
+Comparing local weights vs. global weights in local TOPSIS isolates the effect of weight adjustments on rankings.
 
-```{r}
+```{r original percentile}
 
 # Get the original rank and compute percentile rank 
 # then join it with the result from local MCDA
 # to compare whether the percentile rank is higher or lower than the global MCDA
 final_percentile <- final %>% 
-  dplyr::select(NAME, uniqueID, avg_rank, topsis_rank) %>%
+  dplyr::select(NAME, uniqueID, avg_rank, topsis_rank, wsm_rank) %>%
   mutate(
     avg_percentile = percent_rank(avg_rank) * 100,
     topsis_percentile = percent_rank(topsis_rank) * 100)
   
+```
 
 
+```{r compare global and local }
+
+# quick check for cluster 1
+TOPSIS_c1  <- TOPSIS_c1 %>% 
+  left_join(TOPSIS_c1_org %>% dplyr::select(uniqueID, topsis_percentile_c1_org), by = "uniqueID") %>%
+  left_join(final_percentile %>% dplyr::select(uniqueID, 
+                                               NAME, 
+                                               topsis_percentile, 
+                                               avg_percentile,
+                                              
+                                          ), by = "uniqueID") %>%
+  dplyr::select(NAME, uniqueID, avg_percentile, topsis_percentile, topsis_percentile_c1, topsis_percentile_c1_org)
+
+# quick check for cluster 2
+TOPSIS_c2  <- TOPSIS_c2 %>% 
+  left_join(TOPSIS_c2_org %>% dplyr::select(uniqueID, topsis_percentile_c2_org), by = "uniqueID") %>%
+  left_join(final_percentile %>% dplyr::select(uniqueID, 
+                                               NAME, 
+                                               topsis_percentile, 
+                                               avg_percentile
+                                          ), by = "uniqueID") %>%
+  dplyr::select(NAME, uniqueID, avg_percentile, topsis_percentile, topsis_percentile_c2, topsis_percentile_c2_org)
+
+# quick check for cluster 3
+TOPSIS_c3  <- TOPSIS_c3 %>% 
+  left_join(TOPSIS_c3_org %>% dplyr::select(uniqueID, topsis_percentile_c3_org), by = "uniqueID") %>%
+  left_join(final_percentile %>% dplyr::select(uniqueID, 
+                                               NAME, 
+                                               topsis_percentile, 
+                                               avg_percentile
+                                          ), by = "uniqueID") %>%
+  dplyr::select(NAME, uniqueID, avg_percentile, topsis_percentile, topsis_percentile_c3, topsis_percentile_c3_org)
+
+# quick check for cluster 4
+TOPSIS_c4  <- TOPSIS_c4 %>% 
+  left_join(TOPSIS_c4_org %>% dplyr::select(uniqueID, topsis_percentile_c4_org), by = "uniqueID") %>%
+  left_join(final_percentile %>% dplyr::select(uniqueID, 
+                                               NAME, 
+                                               topsis_percentile, 
+                                               avg_percentile
+                                          ), by = "uniqueID") %>%
+  dplyr::select(NAME, uniqueID, avg_percentile, topsis_percentile, topsis_percentile_c4, topsis_percentile_c4_org)
 
 ```
+
+
+Now do some visualization and analysis for comparison using cluster 4 as an example.
+
+```{r}
+
+# using cluster 1 as an example
+TOPSIS_c4 %>% 
+  ggplot(aes(x = topsis_percentile_c4_org, y = topsis_percentile_c4)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  geom_smooth(method = "lm", color = "blue", se = FALSE) + 
+  labs(title = "Comparison of Global and Local TOPSIS Percentile Rank for Cluster 1",
+       x = "Global Percentile Rank",
+       y = "Local Percentile Rank") +
+  theme_minimal() +
+  theme(plot.subtitle = element_text(size = 12,face = "italic"),
+        plot.title = element_text(size = 15, face = "bold"), 
+        axis.text.x=element_text(size=8),
+        axis.text.y=element_text(size=8), 
+        axis.title=element_text(size=9), 
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, linewidth =0.8))
+
+  
+model1 <- lm(topsis_percentile_c3 ~ topsis_percentile, data = TOPSIS_c3)
+model2<- lm(topsis_percentile_c3 ~ topsis_percentile_c3_org, data = TOPSIS_c3)
+model3 <- lm(topsis_percentile ~ topsis_percentile_c3_org, data = TOPSIS_c3)
+
+library(stargazer)
+stargazer(model1, model2, model3, type = "text")
+```
+
+Cluster 1: 
+Local TOPSIS (Local Weights) vs. Global TOPSIS --- -0.870
+Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.901
+Local TOPSIS (Global Weights) vs. Global TOPSIS --- -0.207
+
+
+Cluster 2: 
+Local TOPSIS (Local Weights) vs. Global TOPSIS --- -0.979
+Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.930
+Local TOPSIS (Global Weights) vs. Global TOPSIS --- -0.802
+
+Cluster 3:
+Local TOPSIS (Local Weights) vs. Global TOPSIS --- -0.853
+Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.911
+Local TOPSIS (Global Weights) vs. Global TOPSIS --- -0.890
+
+Cluster 4: 
+Local TOPSIS (Local Weights) vs. Global TOPSIS --- -0.837
+Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.962
+Local TOPSIS (Global Weights) vs. Global TOPSIS --- -0.491
 
 
 ```{r}
-# quick check
-TOPSIS_c1 %>% 
-  left_join(final, by = "uniqueID") %>%
-  dplyr::select(uniqueID, NAME, topsis_rank_c1, topsis_percentile_c1, topsis_rank, topsis_percentile)
+
+# an overall regression summary table here
+
+
+
 ```
+
+
+
+```{r}
+
+TOPSIS_c4 %>% 
+  left_join(cluster4 %>% dplyr::select(uniqueID, geometry), by = "uniqueID") %>% 
+  st_as_sf() %>% 
+  ggplot() +
+  geom_sf(data = fishnet, color = "black") +
+  geom_sf(aes(fill = topsis_percentile_c4), color = "black") +
+  scale_fill_viridis_c(option = "plasma") +
+  theme_bw()
+
+```
+
+
+
+
+```{r fig.height=14, fig.width=14}
+
+# sankey diagram
+# Categorize percentiles into rank groups
+
+TOPSIS_c1 %>%
+  mutate(
+    global_avg_rank = cut(avg_percentile, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
+    global_topsis_rank = cut(topsis_percentile, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
+    local_global_weight_rank = cut(topsis_percentile_c1, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
+    local_local_weight_rank = cut(topsis_percentile_c1_org, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%"))
+  ) %>%
+  dplyr::count(global_avg_rank, global_topsis_rank, local_global_weight_rank, local_local_weight_rank) %>% 
+  ggplot(., aes(axis1 = global_avg_rank, 
+                      axis2 = global_topsis_rank,
+                      axis3 = local_global_weight_rank, 
+                      axis4 = local_local_weight_rank, 
+                      y = n)) +
+  scale_x_discrete(limits = c("Global AVG", "Global TOPSIS", "Local TOPSIS (Global Weights)", "Local TOPSIS (Local Weights)"), 
+                   expand = c(.05, .5)) +
+  geom_alluvium(aes(fill = global_avg_rank), alpha = 0.8) +  # Fill based on initial ranking
+  geom_stratum(color = "grey") + 
+  geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 4) + 
+  scale_fill_manual(values = custom_palette) +
+  theme_minimal() +
+  labs(title = "Rank Transitions Between Global and Local TOPSIS Methods",
+       x = "Ranking Method", y = "Grid Count")
+
+```
+
+
+Let's explain rank reversal a bit more: First, TOPSIS normalizes the data, meaning that scores are relative to the other grids in the analysis.When running global MCDA, every grid competes against all grids. When running Cluster specific MCDA, grids only compete within their cluster, causing a redistribution of relative rankings A grid that was middle-rank globally may appear much worse locally if it no longer competes with weaker grids outside its cluster. In other words, in the global model, these ideal/worst solutions are calculated from all grids, meaning that certain grids may appear closer to the ideal simply because they are better than the worst performers globally. Also in the global model, percentile rankings are spread across all grids, whereas in Cluster 1, only a subset of grids exist.If a grid was ranked 60% globally but now competes against only the densest, highest-priority locations, it might drop into a much lower percentile
+
+
+Rank reversal highlights the influence of localized criteria adjustment, where grids that were ranked high globally are now low-ranked within Cluster 1 demonstrates how local prioritization can shift the relative importance of criteria. This is an expected outcome of context-sensitive decision-making as the relative distances to ideal and anti-ideal solutions shift when the evaluation is confined to specific clusters. A good example could be that globally, a grid may rank well due to high EV registration and population density.Locally, in a cluster where most grids already have high EV registration and we put more priority on other criteria, this same grid no longer stands out, leading to a lower ranking.
+
+That said, local MCDA helps to avoid Over-Investment in already well-served areas. If only global MCDA were used, policymakers might favor areas that already rank high globally, potentially reinforcing existing disparities.Local MCDA allows a more targeted, equity-focused approach, ensuring that EVSE expansion reaches areas with high demand but lower current accessibility.For example, in cluster 4. global MCDA might rank some grids lower due to low current EV ownership, even though they urgently need better accessibility. Local MCDA increases the weight of EVSE accessibility and population density, ensuring these areas are prioritized for investment.
+
+Therefore, we should take a multi-scale approach (global + local) . This ensures that investments in EVSE infrastructure align with both system-wide efficiency and local equity goals. Global MCDA determines which neighborhoods or districts should receive EVSE investment. Local MCDA ensures that within those neighborhoods, resources are allocated to grids that need it the most, rather than just reinforcing existing infrastructure.
+
+
+
+
+**Short Summary for local MCDA:**
+Global MCDA ranks all grids together based on a uniform weighting scheme, which is necessary for understanding overall spatial trends in EVSE suitability. However, different urban and suburban clusters have distinct socio-economic, infrastructural, and land-use characteristics. A single set of weights may not reflect local needs effectively.
+
+
+
 
 
 # Public Private Partnership
