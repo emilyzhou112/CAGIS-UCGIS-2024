@@ -1284,7 +1284,275 @@ We will use the TOPSIS method to test out the local MCDA model, since TOPSIS was
 Also, TOPSIS avoids WSM's linearity issue. WSM is purely additive, meaning it treats all weighted values as independent and does not consider how alternatives compare to an ideal or worst-case scenario.This can be problematic in localized MCDA where extreme values may exist (e.g., a cluster with very high EV ownership but poor accessibility).
 PROMETHEE is a pairwise ranking method, meaning it compares each alternative to every other alternative, which can introduce ranking biases when dealing with smaller, more homogeneous clusters.TOPSIS is computationally less expensive than PROMETHEE, making it easier to run on multiple clusters without excessive processing time.
 
+## Try Local WSM
 
+
+```{r}
+# weights_c1 <- c(0.12, 0.14, 0.12, 0.16, 0.16, 0.08, 0.06, 0.06, 0.10)
+WSM_c1 <- cluster1 %>% 
+  mutate(scl_density = scale_values(density),
+         scl_acc = scale_values(TSFCA),
+         scl_drivingpop = scale_values(driving_pop),
+         scl_evse = scale_values(evse.nn),
+         scl_elec = scale_values(elec_cnt),
+         scl_parking = scale_values(parking.nn),
+         scl_policefire = scale_values(policefire.nn),
+         scl_elect_use = scale_values(elect_use)
+         ) %>% 
+  mutate(scl_evse_re = 0 - scl_evse + 1,
+         scl_acc_re = 0 - scl_acc + 1, 
+         scl_parking_re = 0 - scl_parking + 1,
+         scl_policefire_re = 0 - scl_policefire + 1) %>% 
+  mutate(score = 0.12*scl_evse_re + 0.14*scl_density + 0.12*scl_drivingpop + 0.16*scl_acc_re + 0.16*scl_elec + 0.08*scl_parking_re + 0.06*scl_policefire_re + 0.06*zone_score + 0.10*scl_elect_use) %>% 
+  dplyr::select(c(uniqueID, score)) %>% 
+  mutate(wsm_rank_c1 = rank(score)) %>% 
+  mutate(wsm_percentile_c1 = percent_rank(wsm_rank_c1) * 100)
+
+#weights_c2 <- c(0.14, 0.08, 0.08, 0.10, 0.12, 0.12, 0.06, 0.10, 0.20)
+WSM_c2 <- cluster2 %>% 
+  mutate(scl_density = scale_values(density),
+         scl_acc = scale_values(TSFCA),
+         scl_drivingpop = scale_values(driving_pop),
+         scl_evse = scale_values(evse.nn),
+         scl_elec = scale_values(elec_cnt),
+         scl_parking = scale_values(parking.nn),
+         scl_policefire = scale_values(policefire.nn),
+         scl_elect_use = scale_values(elect_use)
+         ) %>% # now inverse some scales
+  mutate(scl_evse_re = 0 - scl_evse + 1,
+         scl_acc_re = 0 - scl_acc + 1, 
+         scl_parking_re = 0 - scl_parking + 1,
+         scl_policefire_re = 0 - scl_policefire + 1) %>% 
+  mutate(score = 0.14*scl_evse_re + 0.08*scl_density + 0.08*scl_drivingpop + 0.10*scl_acc_re + 0.12*scl_elec + 0.12*scl_parking_re + 0.06*scl_policefire_re + 0.10*zone_score + 0.20*scl_elect_use) %>% 
+  dplyr::select(c(uniqueID, score)) %>%
+  mutate(wsm_rank_c2 = rank(score)) %>%
+  mutate(wsm_percentile_c2 = percent_rank(wsm_rank_c2) * 100)
+
+#weights_c3 <- c(0.20, 0.10, 0.12, 0.14, 0.18, 0.06, 0.06, 0.06, 0.08)
+WSM_c3 <- cluster3 %>% 
+  mutate(scl_density = scale_values(density),
+         scl_acc = scale_values(TSFCA),
+         scl_drivingpop = scale_values(driving_pop),
+         scl_evse = scale_values(evse.nn),
+         scl_elec = scale_values(elec_cnt),
+         scl_parking = scale_values(parking.nn),
+         scl_policefire = scale_values(policefire.nn),
+         scl_elect_use = scale_values(elect_use)
+         ) %>% 
+  mutate(scl_evse_re = 0 - scl_evse + 1,
+         scl_acc_re = 0 - scl_acc + 1, 
+         scl_parking_re = 0 - scl_parking + 1,
+         scl_policefire_re = 0 - scl_policefire + 1) %>% 
+  mutate(score = 0.20*scl_evse_re + 0.10*scl_density + 0.12*scl_drivingpop + 0.14*scl_acc_re + 0.18*scl_elec + 0.06*scl_parking_re + 0.06*scl_policefire_re + 0.06*zone_score + 0.08*scl_elect_use) %>% 
+  dplyr::select(c(uniqueID, score)) %>%
+  mutate(wsm_rank_c3 = rank(score)) %>%
+  mutate(wsm_percentile_c3 = percent_rank(wsm_rank_c3) * 100)
+
+#weights_c4 <- c(0.16, 0.14, 0.12, 0.18, 0.12, 0.08, 0.04, 0.06, 0.10)
+WSM_c4 <- cluster4 %>% 
+  mutate(scl_density = scale_values(density),
+         scl_acc = scale_values(TSFCA),
+         scl_drivingpop = scale_values(driving_pop),
+         scl_evse = scale_values(evse.nn),
+         scl_elec = scale_values(elec_cnt),
+         scl_parking = scale_values(parking.nn),
+         scl_policefire = scale_values(policefire.nn),
+         scl_elect_use = scale_values(elect_use)
+         ) %>% 
+  mutate(scl_evse_re = 0 - scl_evse + 1,
+         scl_acc_re = 0 - scl_acc + 1, 
+         scl_parking_re = 0 - scl_parking + 1,
+         scl_policefire_re = 0 - scl_policefire + 1) %>% 
+  mutate(score = 0.16*scl_evse_re + 0.14*scl_density + 0.12*scl_drivingpop + 0.18*scl_acc_re + 0.12*scl_elec + 0.08*scl_parking_re + 0.04*scl_policefire_re + 0.06*zone_score + 0.10*scl_elect_use) %>% 
+  dplyr::select(c(uniqueID, score)) %>%
+  mutate(wsm_rank_c4 = rank(score)) %>%
+  mutate(wsm_percentile_c4 = percent_rank(wsm_rank_c4) * 100)
+
+```
+
+
+```{r test with original}
+
+# using original weights
+# this is evse.nn, density, driving_pop, TSFCA, elec_cnt, parking.nn, policefire.nn, zone score, elect_use
+# weights_original <- c(0.18, 0.12, 0.1, 0.12, 0.15, 0.1, 0.05, 0.05, 0.13)
+
+WSM_c1_org <- cluster1 %>% 
+  mutate(scl_density = scale_values(density),
+         scl_acc = scale_values(TSFCA),
+         scl_drivingpop = scale_values(driving_pop),
+         scl_evse = scale_values(evse.nn),
+         scl_elec = scale_values(elec_cnt),
+         scl_parking = scale_values(parking.nn),
+         scl_policefire = scale_values(policefire.nn),
+         scl_elect_use = scale_values(elect_use)
+         ) %>% 
+  mutate(scl_evse_re = 0 - scl_evse + 1,
+         scl_acc_re = 0 - scl_acc + 1, 
+         scl_parking_re = 0 - scl_parking + 1,
+         scl_policefire_re = 0 - scl_policefire + 1) %>% 
+  mutate(score = 0.18*scl_evse_re + 0.12*scl_density + 0.1*scl_drivingpop + 0.12*scl_acc_re + 0.15*scl_elec + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.13*scl_elect_use) %>% 
+  dplyr::select(c(uniqueID, score)) %>% 
+  mutate(wsm_rank_c1_org = rank(score)) %>% 
+  mutate(wsm_percentile_c1_org = percent_rank(wsm_rank_c1_org) * 100)
+
+
+WSM_c2_org <- cluster2 %>%
+  mutate(scl_density = scale_values(density),
+         scl_acc = scale_values(TSFCA),
+         scl_drivingpop = scale_values(driving_pop),
+         scl_evse = scale_values(evse.nn),
+         scl_elec = scale_values(elec_cnt),
+         scl_parking = scale_values(parking.nn),
+         scl_policefire = scale_values(policefire.nn),
+         scl_elect_use = scale_values(elect_use)
+         ) %>% 
+  mutate(scl_evse_re = 0 - scl_evse + 1,
+         scl_acc_re = 0 - scl_acc + 1, 
+         scl_parking_re = 0 - scl_parking + 1,
+         scl_policefire_re = 0 - scl_policefire + 1) %>% 
+  mutate(score = 0.18*scl_evse_re + 0.12*scl_density + 0.1*scl_drivingpop + 0.12*scl_acc_re + 0.15*scl_elec + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.13*scl_elect_use) %>% 
+  dplyr::select(c(uniqueID, score)) %>%
+  mutate(wsm_rank_c2_org = rank(score)) %>%
+  mutate(wsm_percentile_c2_org = percent_rank(wsm_rank_c2_org) * 100)
+  
+WSM_c3_org <- cluster3 %>%
+  mutate(scl_density = scale_values(density),
+         scl_acc = scale_values(TSFCA),
+         scl_drivingpop = scale_values(driving_pop),
+         scl_evse = scale_values(evse.nn),
+         scl_elec = scale_values(elec_cnt),
+         scl_parking = scale_values(parking.nn),
+         scl_policefire = scale_values(policefire.nn),
+         scl_elect_use = scale_values(elect_use)
+         ) %>% 
+  mutate(scl_evse_re = 0 - scl_evse + 1,
+         scl_acc_re = 0 - scl_acc + 1, 
+         scl_parking_re = 0 - scl_parking + 1,
+         scl_policefire_re = 0 - scl_policefire + 1) %>% 
+  mutate(score = 0.18*scl_evse_re + 0.12*scl_density + 0.1*scl_drivingpop + 0.12*scl_acc_re + 0.15*scl_elec + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.13*scl_elect_use) %>% 
+  dplyr::select(c(uniqueID, score)) %>%
+  mutate(wsm_rank_c3_org = rank(score)) %>%
+  mutate(wsm_percentile_c3_org = percent_rank(wsm_rank_c3_org) * 100)
+
+WSM_c4_org <- cluster4 %>%
+  mutate(scl_density = scale_values(density),
+         scl_acc = scale_values(TSFCA),
+         scl_drivingpop = scale_values(driving_pop),
+         scl_evse = scale_values(evse.nn),
+         scl_elec = scale_values(elec_cnt),
+         scl_parking = scale_values(parking.nn),
+         scl_policefire = scale_values(policefire.nn),
+         scl_elect_use = scale_values(elect_use)
+         ) %>% 
+  mutate(scl_evse_re = 0 - scl_evse + 1,
+         scl_acc_re = 0 - scl_acc + 1, 
+         scl_parking_re = 0 - scl_parking + 1,
+         scl_policefire_re = 0 - scl_policefire + 1) %>% 
+  mutate(score = 0.18*scl_evse_re + 0.12*scl_density + 0.1*scl_drivingpop + 0.12*scl_acc_re + 0.15*scl_elec + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.13*scl_elect_use) %>% 
+  dplyr::select(c(uniqueID, score)) %>%
+  mutate(wsm_rank_c4_org = rank(score)) %>%
+  mutate(wsm_percentile_c4_org = percent_rank(wsm_rank_c4_org) * 100)
+
+```
+
+
+
+```{r original percentile}
+
+# Get the original rank and compute percentile rank 
+# then join it with the result from local MCDA
+# to compare whether the percentile rank is higher or lower than the global MCDA
+final_percentile <- final %>% 
+  dplyr::select(NAME, uniqueID, avg_rank, topsis_rank, wsm_rank) %>%
+  mutate(
+    avg_percentile = percent_rank(avg_rank) * 100,
+    wsm_percentile = percent_rank(wsm_rank) * 100,
+    topsis_percentile = percent_rank(topsis_rank) * 100)
+  
+```
+
+
+```{r}
+
+# join with original percentile
+WSM_c1 <- WSM_c1 %>% 
+  st_drop_geometry() %>%
+  left_join(WSM_c1_org %>% dplyr::select(uniqueID, wsm_percentile_c1_org), by = "uniqueID") %>%
+  left_join(final_percentile %>% dplyr::select(uniqueID, 
+                                               NAME, 
+                                               wsm_percentile, 
+                                               avg_percentile,
+                                          ), by = "uniqueID") %>%
+  dplyr::select(NAME, uniqueID, avg_percentile, wsm_percentile, wsm_percentile_c1, wsm_percentile_c1_org)
+
+WSM_c2 <- WSM_c2 %>%
+  st_drop_geometry() %>%
+  left_join(WSM_c2_org %>% dplyr::select(uniqueID, wsm_percentile_c2_org), by = "uniqueID") %>%
+  left_join(final_percentile %>% dplyr::select(uniqueID, 
+                                               NAME, 
+                                               wsm_percentile, 
+                                               avg_percentile,
+                                              
+                                          ), by = "uniqueID") %>%
+  dplyr::select(NAME, uniqueID, avg_percentile, wsm_percentile, wsm_percentile_c2, wsm_percentile_c2_org)
+
+WSM_c3 <- WSM_c3 %>%
+  st_drop_geometry() %>%
+  left_join(WSM_c3_org %>% dplyr::select(uniqueID, wsm_percentile_c3_org), by = "uniqueID") %>%
+  left_join(final_percentile %>% dplyr::select(uniqueID, 
+                                               NAME, 
+                                               wsm_percentile, 
+                                               avg_percentile,
+                                              
+                                          ), by = "uniqueID") %>%
+  dplyr::select(NAME, uniqueID, avg_percentile, wsm_percentile, wsm_percentile_c3, wsm_percentile_c3_org)
+
+WSM_c4 <- WSM_c4 %>%
+  st_drop_geometry() %>%
+  left_join(WSM_c4_org %>% dplyr::select(uniqueID, wsm_percentile_c4_org), by = "uniqueID") %>%
+  left_join(final_percentile %>% dplyr::select(uniqueID, 
+                                               NAME, 
+                                               wsm_percentile, 
+                                               avg_percentile,
+                                              
+                                          ), by = "uniqueID") %>%
+  dplyr::select(NAME, uniqueID, avg_percentile, wsm_percentile, wsm_percentile_c4, wsm_percentile_c4_org)
+  
+
+
+```
+
+
+```{r}
+
+WSM_c1 %>% 
+  ggplot(aes(x = wsm_percentile , y = wsm_percentile_c1)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue", se = FALSE) + 
+  labs(title = "Comparison of Global and Local TOPSIS Percentile Rank for Cluster 1",
+       x = "Global Percentile Rank",
+       y = "Local Percentile Rank") +
+  theme_minimal() +
+  theme(plot.subtitle = element_text(size = 12,face = "italic"),
+        plot.title = element_text(size = 15, face = "bold"), 
+        axis.text.x=element_text(size=8),
+        axis.text.y=element_text(size=8), 
+        axis.title=element_text(size=9), 
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, linewidth =0.8))
+
+model1_wsm <- lm(wsm_percentile_c4 ~ wsm_percentile, data = WSM_c4)
+model2_wsm<- lm(wsm_percentile_c4 ~ wsm_percentile_c4_org, data = WSM_c4)
+model3_wsm <- lm(wsm_percentile ~ wsm_percentile_c4_org, data = WSM_c4)
+
+library(stargazer)
+stargazer(model1_wsm, model2_wsm, model3_wsm, type = "text")
+```
+
+
+
+## Try Local TOPSIS
 
 ```{r construct performance table for local MCDA}
 
@@ -1447,19 +1715,6 @@ Comparing local vs. global TOPSIS reveals how rankings shift due to local condit
 Comparing local TOPSIS to global average MCDA checks if local patterns align with broader decision-making trends.
 Comparing local weights vs. global weights in local TOPSIS isolates the effect of weight adjustments on rankings.
 
-```{r original percentile}
-
-# Get the original rank and compute percentile rank 
-# then join it with the result from local MCDA
-# to compare whether the percentile rank is higher or lower than the global MCDA
-final_percentile <- final %>% 
-  dplyr::select(NAME, uniqueID, avg_rank, topsis_rank, wsm_rank) %>%
-  mutate(
-    avg_percentile = percent_rank(avg_rank) * 100,
-    topsis_percentile = percent_rank(topsis_rank) * 100)
-  
-```
-
 
 ```{r compare global and local }
 
@@ -1562,16 +1817,6 @@ Local TOPSIS (Global Weights) vs. Global TOPSIS --- -0.491
 
 ```{r}
 
-# an overall regression summary table here
-
-
-
-```
-
-
-
-```{r}
-
 TOPSIS_c4 %>% 
   left_join(cluster4 %>% dplyr::select(uniqueID, geometry), by = "uniqueID") %>% 
   st_as_sf() %>% 
@@ -1582,7 +1827,6 @@ TOPSIS_c4 %>%
   theme_bw()
 
 ```
-
 
 
 
@@ -1625,8 +1869,6 @@ Rank reversal highlights the influence of localized criteria adjustment, where g
 That said, local MCDA helps to avoid Over-Investment in already well-served areas. If only global MCDA were used, policymakers might favor areas that already rank high globally, potentially reinforcing existing disparities.Local MCDA allows a more targeted, equity-focused approach, ensuring that EVSE expansion reaches areas with high demand but lower current accessibility.For example, in cluster 4. global MCDA might rank some grids lower due to low current EV ownership, even though they urgently need better accessibility. Local MCDA increases the weight of EVSE accessibility and population density, ensuring these areas are prioritized for investment.
 
 Therefore, we should take a multi-scale approach (global + local) . This ensures that investments in EVSE infrastructure align with both system-wide efficiency and local equity goals. Global MCDA determines which neighborhoods or districts should receive EVSE investment. Local MCDA ensures that within those neighborhoods, resources are allocated to grids that need it the most, rather than just reinforcing existing infrastructure.
-
-
 
 
 **Short Summary for local MCDA:**
