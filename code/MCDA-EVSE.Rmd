@@ -1800,6 +1800,56 @@ TOPSIS_c4_cp  <- TOPSIS_c4 %>%
 ```
 
 
+```{r global and local score combined }
+
+global_local <- TOPSIS %>% 
+  mutate(global_val = values) %>% 
+  mutate(global_rank = topsis_rank) %>% 
+  left_join(TOPSIS_c1 %>% mutate(c1_val = values) %>% dplyr::select(uniqueID, c1_val), by = "uniqueID") %>%
+  left_join(TOPSIS_c2 %>% mutate(c2_val = values) %>% dplyr::select(uniqueID, c2_val), by = "uniqueID") %>%
+  left_join(TOPSIS_c3 %>% mutate(c3_val = values) %>% dplyr::select(uniqueID, c3_val), by = "uniqueID") %>%
+  left_join(TOPSIS_c4 %>% mutate(c4_val = values) %>% dplyr::select(uniqueID, c4_val), by = "uniqueID") %>%
+  mutate(local_val = coalesce(c1_val, c2_val, c3_val, c4_val)) %>%
+  mutate(local_rank = min_rank(desc(local_val))) %>%
+  dplyr::select(uniqueID, global_val, global_rank, local_val, local_rank)
+  
+
+```
+
+
+
+        
+```{r}
+
+global_local_toplot <- fishnet_nowater %>% 
+  dplyr::select(uniqueID, geometry) %>%
+  left_join(global_local, by = "uniqueID")
+
+quantiles_glo <- classIntervals(global_local_toplot$global_val, n = 6, style = "quantile")
+quantiles_loc <- classIntervals(global_local_toplot$local_val, n = 6, style = "quantile")
+
+global_local_toplot$quantile_glo <- cut(global_local_toplot$global_val, breaks = quantiles_glo$brks, include.lowest = TRUE)
+global_local_toplot$quantile_loc <- cut(global_local_toplot$local_val, breaks = quantiles_loc$brks, include.lowest = TRUE)
+
+ggplot()+
+  geom_sf(data=fishnet, color="black", fill="white") +
+ geom_sf(data = global_local_toplot, aes(fill = quantile_loc), color = "black") +
+  scale_fill_brewer(palette = "Blues") + 
+  labs(title = "Local TOPSIS Score", fill = "Bins") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
+
+```
+
+
 ```{r}
 
 # using cluster 1 as an example
@@ -1823,7 +1873,7 @@ TOPSIS_c1_cp %>%
   
 model1 <- lm(topsis_percentile_c1 ~ topsis_percentile, data = TOPSIS_c1_cp)
 model2<- lm(topsis_percentile_c1 ~ topsis_percentile_c1_org, data = TOPSIS_c1_cp)
-model3 <- lm(topsis_percentile ~ topsis_percentile_c1_org, data = TOPSIS_c1_cp)
+model3 <- lm(topsis_percentile_c1_org ~ topsis_percentile, data = TOPSIS_c1_cp)
 
 library(stargazer)
 stargazer(model1, model2, model3, type = "text")
@@ -1884,7 +1934,7 @@ Ranked 45 in Global
 Ranked 4.35 in Local
 This is located at the intersection of Tacony Creek Park and Junita Park, close to Adams Ave. There is a shopping mall with big parking lots. 
 
-```{r fig.height=14, fig.width=14}
+```{r sankey, fig.height=14, fig.width=14}
 
 # sankey diagram
 # Categorize percentiles into rank groups
