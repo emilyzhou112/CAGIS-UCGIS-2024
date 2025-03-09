@@ -14,7 +14,7 @@ editor_options:
     wrap: sentence
 ---
 
-Version 2.0 \| First Created Nov 17, 2023 \| Updated Jun 2, 2024
+Version 5.0 \| First Created Nov 17, 2023 \| Updated Mar 9, 2025
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -207,7 +207,7 @@ reg_ev <- reg_ev %>%
 
 ```{r load existing evse, message=FALSE, warning=FALSE}
 
-evse <- read.csv(here("data", "raw", "existing_evse.csv"))
+evse <- read.csv(here::here("data", "raw", "existing_evse.csv"))
 evse <- evse %>% 
   filter(City == "Philadelphia") %>% 
   dplyr::select(Latitude, Longitude, EV.Level2.EVSE.Num) %>% 
@@ -405,9 +405,9 @@ custom_palette <- c("#C4C4C4", "#B2BF95", "#80A676", "#88BFBF", "#7EA1BF")
 quantiles <- classIntervals(WSM$score, n = 5, style = "quantile")
 WSM$quantile <- cut(WSM$score, breaks = quantiles$brks, include.lowest = TRUE)
 
-ggplot()+
-  geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=WSM, color="black", aes(fill=quantile)) + 
+WSM_plot <- ggplot()+
+  geom_sf(data=fishnet, color=NA, fill="white") +
+  geom_sf(data=WSM, color = NA, aes(fill=quantile)) + 
   scale_fill_manual(values = custom_palette) + 
   labs(title = "Weighted Sum Method Score", fill = "Bins") +
   theme(axis.text.x=element_blank(),
@@ -421,6 +421,7 @@ ggplot()+
         panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
         )
 ```
+
 
 ```{r save a version}
 
@@ -477,13 +478,13 @@ TOPSIS_toplot <- fishnet_nowater %>%
 
 ```{r visualize topsis result}
 
-quantiles <- classIntervals(TOPSIS_toplot$values, n = 6, style = "quantile")
+quantiles <- classIntervals(TOPSIS_toplot$values, n = 5, style = "quantile")
 TOPSIS_toplot$quantile <- cut(TOPSIS_toplot$values, breaks = quantiles$brks, include.lowest = TRUE)
 
-ggplot()+
-  geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=TOPSIS_toplot, color="black", aes(fill=quantile))+ 
-  scale_fill_brewer(palette = "Blues") + 
+TOPSIS_plot <- ggplot()+
+  geom_sf(data=fishnet, color=NA, fill="white") +
+  geom_sf(data=TOPSIS_toplot, color=NA, aes(fill=quantile))+ 
+  scale_fill_manual(values = custom_palette) + 
   labs(title = "TOPSIS Score", fill = "Bins") +
   theme(axis.text.x=element_blank(),
         axis.text.y=element_blank(),
@@ -495,6 +496,7 @@ ggplot()+
         panel.background = element_blank(),
         panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
         )
+
 ```
 
 However, the TOPSIS method presents certain drawbacks. One of the problems attributable to TOPSIS is that it can cause the phenomenon known as rank reversal. In this phenomenon the alternatives’ order of preference changes when an alternative is added to or removed from the decision problem. In some cases this may lead to what is called total rank reversal, where the order of preferences is totally inverted, that is to say, that the alternative considered the best, with the inclusion or removal of an alternative from the process, then becomes the worst. 
@@ -581,13 +583,13 @@ PROMETHEE_toplot <- fishnet_nowater %>%
 
 
 ```{r visualize promethee}
-quantiles <- classIntervals(PROMETHEE_toplot$net, n = 6, style = "quantile")
+quantiles <- classIntervals(PROMETHEE_toplot$net, n = 5, style = "quantile")
 PROMETHEE_toplot$quantile <- cut(PROMETHEE_toplot$net, breaks = quantiles$brks, include.lowest = TRUE)
 
-ggplot()+
-  geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=PROMETHEE_toplot, color="black", aes(fill=quantile)) + 
-  scale_fill_brewer(palette = "Blues") +
+PROMETHEE_plot <- ggplot()+
+  geom_sf(data=fishnet, color=NA, fill="white") +
+  geom_sf(data=PROMETHEE_toplot, color=NA, aes(fill=quantile)) + 
+  scale_fill_manual(values = custom_palette) + 
   labs(title = "PROMETHEE Score", fill = "Bins") +
   theme(axis.text.x=element_blank(),
         axis.text.y=element_blank(),
@@ -599,6 +601,8 @@ ggplot()+
         panel.background = element_blank(),
         panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
         )
+
+
 ```
 
 
@@ -611,8 +615,6 @@ st_write(PROMETHEE_toplot, here("data", "derived", "PROMETHEE.geojson"), driver 
 ## AHP + TOPSIS
 
 To determine weights using the Analytic Hierarchy Process (AHP), start by defining the decision problem and structuring it into a hierarchy, including the goal at the top, followed by criteria and sub-criteria (if any), and the alternatives at the bottom. Construct pairwise comparison matrices for the criteria by comparing each pair and assigning relative importance values on a scale from 1 to 9. Normalize the matrices by dividing each element by the sum of its column, then calculate the priority vector (weights) by averaging the normalized values across each row. 
-
-
 
 ```{r set up pairwise matrix}
 
@@ -659,7 +661,7 @@ AHP_TOPSIS <- data.frame(uniqueID = names(overall2), values = overall2) %>%
   mutate(uniqueID = as.integer(uniqueID))
   
 AHP_TOPSIS_toplot <- fishnet_nowater %>% 
-  left_join(TOPSIS, by = "uniqueID") 
+  left_join(AHP_TOPSIS, by = "uniqueID") 
 
 
 ```
@@ -670,9 +672,9 @@ AHP_TOPSIS_toplot <- fishnet_nowater %>%
 quantiles <- classIntervals(AHP_TOPSIS_toplot$values, n = 5, style = "quantile")
 AHP_TOPSIS_toplot$quantile <- cut(AHP_TOPSIS_toplot$values, breaks = quantiles$brks, include.lowest = TRUE)
 
-ggplot()+
-  geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=AHP_TOPSIS_toplot, color="black", aes(fill=quantile)) + 
+AHP_TOPSIS_plot <- ggplot()+
+  geom_sf(data=fishnet, color=NA, fill="white") +
+  geom_sf(data=AHP_TOPSIS_toplot, color=NA, aes(fill=quantile)) + 
   scale_fill_manual(values = custom_palette) +
   labs(title = "AHP Score", fill = "Bins") +
   theme(axis.text.x=element_blank(),
@@ -685,7 +687,8 @@ ggplot()+
         panel.background = element_blank(),
         panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
         )
-  
+
+
 ```
 
 ```{r save a version}
@@ -697,7 +700,16 @@ st_write(AHP_TOPSIS_toplot, here("data", "derived", "AHP.geojson"), driver = "Ge
 
 # Analyses
 
-## Average Rank
+## Mapping Spatial Consistency 
+
+```{r fig.height=12, fig.width=12}
+
+library(ggpubr)
+ggarrange(WSM_plot, TOPSIS_plot, PROMETHEE_plot, AHP_TOPSIS_plot, ncol = 2, nrow = 2)
+
+```
+
+## Measure Rank Alignment 
 
 ```{r combine all ranks together}
 
@@ -713,7 +725,7 @@ PROMETHEE <- promethee_df %>%
 
 AHP_TOPSIS <- AHP_TOPSIS %>% 
   mutate(ahptopsis_rank = min_rank(desc(values)))
-
+ 
 rank_compare <- WSM %>% 
   dplyr::select(c(uniqueID, wsm_rank)) %>% 
   left_join(., TOPSIS %>% dplyr::select(uniqueID, topsis_rank), by = "uniqueID") %>% 
@@ -724,41 +736,49 @@ rank_compare <- WSM %>%
 ```
 
 
-```{r save a version}
+```{r spearman rank correlation}
 
-st_write(rank_compare, here("data", "derived", "average_rank.geojson"), driver = "GeoJSON")
+options(scipen=999)
+# Define a function to compute correlation and p-value
+compute_spearman <- function(x, y) {
+  cor_test <- cor.test(x, y, method = "spearman")
+  return(c(correlation = cor_test$estimate, p_value = cor_test$p.value))
+}
+
+# Compute correlations and p-values for all comparisons
+global_cor_results <- data.frame(
+  Comparison = c("AHP vs TOPSIS", "AHP vs WSM", "AHP vs PROMETHEE",
+                 "TOPSIS vs WSM", "TOPSIS vs PROMETHEE", "WSM vs PROMETHEE"),
+  Correlation = c(
+    compute_spearman(rank_compare$ahptopsis_rank, rank_compare$topsis_rank)[1],
+    compute_spearman(rank_compare$ahptopsis_rank, rank_compare$wsm_rank)[1],
+    compute_spearman(rank_compare$ahptopsis_rank, rank_compare$promethee_rank)[1],
+    compute_spearman(rank_compare$topsis_rank, rank_compare$wsm_rank)[1],
+    compute_spearman(rank_compare$topsis_rank, rank_compare$promethee_rank)[1],
+    compute_spearman(rank_compare$wsm_rank, rank_compare$promethee_rank)[1]
+  ),
+  P_Value = c(
+    compute_spearman(rank_compare$ahptopsis_rank, rank_compare$topsis_rank)[2],
+    compute_spearman(rank_compare$ahptopsis_rank, rank_compare$wsm_rank)[2],
+    compute_spearman(rank_compare$ahptopsis_rank, rank_compare$promethee_rank)[2],
+    compute_spearman(rank_compare$topsis_rank, rank_compare$wsm_rank)[2],
+    compute_spearman(rank_compare$topsis_rank, rank_compare$promethee_rank)[2],
+    compute_spearman(rank_compare$wsm_rank, rank_compare$promethee_rank)[2]
+  )
+)
+cor.test(rank_compare$ahptopsis_rank, rank_compare$topsis_rank, method = "spearman")
 
 ```
 
-We took the average rank among all methods because we would like to find places in Philadelphia that are consistently ranked more suitable than other. 
 
-```{r visualize the average rank}
+Comparing across TOPSIS, PROMETHEE, and weighted sum in ranking the alternatives by looking at the distribution of differences in the rank, we found that:
+1. The differences in rank between weighted sum and promethee method is the smallest. 
+2. TOPSIS is leading to rank reversal issues for some parts of Philadelphia. In other word, a few grids that were ranked of lower priority in PROMETHEE and WSM are ranked of much high priority in TOPSIS and vice versa. Closer examination of these grids reveal that they are located in the outskirt of Philadelphia, mainly industrial areas that use a lot of electricty power. TOPSIS assumes that criteria are independent of each other. When a new alternative is introduced or an existing one is removed, the distance to the ideal and negative-ideal solutions can change. The presence of extreme values (very high or very low) can significantly influence the ideal and negative-ideal solutions. MCDA is sensitive to the quality of our data. 
+3. Assign weights directly has under-ranked several sites than using the AHP. 
 
-rank_toplot <- fishnet_nowater %>% 
-  left_join(rank_compare %>% st_drop_geometry(), by = "uniqueID")
-ggplot()+
-  geom_sf(data=fishnet, color="black", fill="white") +
-  geom_sf(data=rank_toplot, color="black", aes(fill=avg_rank)) +
-  labs(title = "Average Rank", fill = "Rank") +
-  theme(axis.text.x=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks =element_blank(),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        plot.subtitle = element_text(size = 9,face = "italic"),
-        plot.title = element_text(size = 12, face = "bold"),
-        panel.background = element_blank(),
-        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
-        )
-  
-```
+```{r neighborhood?}
 
-## Rank by Neighborhood
-
-We would like to see if some neighborhoods are more suitable than others overall. 
-
-```{r add neighborhood}
-
+# rank consistency by neighborhood? 
 neighborhood <- st_read(here("data", "raw", "PhillyPlanning_Neighborhoods", "PhillyPlanning_Neighborhoods.shp")) %>% st_transform('ESRI:102728') 
   
 
@@ -768,100 +788,41 @@ final <- fishnet_nowater %>%
                st_intersection(neighborhood %>% dplyr::select(NAME)) %>% 
               st_drop_geometry(), by = "uniqueID") %>% 
   mutate(NAME = ifelse(is.na(NAME), "NOT APPLICABLE", NAME))
-  
+
 ```
 
-
-```{r neighborhood plot}
-
-final %>% 
-  st_drop_geometry() %>% 
-  group_by(NAME) %>% 
-  summarize(overall_rank = mean(avg_rank)) %>% 
-  left_join(neighborhood, .,by = "NAME") %>% 
-  ggplot()+
-  geom_sf(color="black", aes(fill=overall_rank)) +
-  scale_fill_gradient(low = "red", high = "white") + # Changed this line
-  labs(title = "Neighborhood Rank", fill = "Rank") +
-  theme(axis.text.x=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks =element_blank(),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        plot.subtitle = element_text(size = 9,face = "italic"),
-        plot.title = element_text(size = 12, face = "bold"),
-        panel.background = element_blank(),
-        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
-        )
-  
-  
-```
-
-## Compare MCDA Methods
-
-Comparing across TOPSIS, PROMETHEE, and weighted sum in ranking the alternatives by looking at the distribution of differences in the rank, we found that:
-1. The differences in rank between weighted sum and promethee method is the smallest. 
-2. TOPSIS is leading to rank reversal issues for some parts of Philadelphia. In other word, a few grids that were ranked of lower priority in PROMETHEE and WSM are ranked of much high priority in TOPSIS and vice versa. Closer examination of these grids reveal that they are located in the outskirt of Philadelphia, mainly industrial areas that use a lot of electricty power. TOPSIS assumes that criteria are independent of each other. When a new alternative is introduced or an existing one is removed, the distance to the ideal and negative-ideal solutions can change. The presence of extreme values (very high or very low) can significantly influence the ideal and negative-ideal solutions. MCDA is sensitive to the quality of our data. 
-3. Assign weights directly has under-ranked several sites than using the AHP. 
-
-```{r compare difference distribution, fig.height=6, fig.width=10}
-
-# if negative, it means that wsm over-rank topsis or promethee
-# if positive, it means that wsm under-rank topsis or promethee
-compare<- final %>% 
-  mutate(wsm_topsis = wsm_rank - topsis_rank, # compare the rank between wsm and topsis
-         wsm_promethee = wsm_rank - promethee_rank, # compare the rank between wsm and promethee
-         promethee_topsis = promethee_rank - topsis_rank) %>% # compare the rank between promethee and topsis
-  mutate(compare_weights = topsis_rank - ahptopsis_rank)
-
-custom_palette1 <- c("#B2BF95", "#80A676", "#88BFBF", "#7EA1BF")
-
-fig1 <- compare %>% 
-  st_drop_geometry() %>% 
-  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, promethee_topsis, compare_weights, NAME)) %>%
-  pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "promethee_topsis", "compare_weights"),  
-               names_to = "variable",        
-               values_to = "value") %>% 
-  ggplot(aes(x = value)) +
-  geom_histogram(binwidth = 10, aes(fill = variable), alpha = 1) +
-  labs(title = "Distribution of Differences in Rank Between Different Methods",
-       x = "Difference",
-       y = "Frequency") +
-  facet_wrap(~ variable, labeller= labeller(variable = c(
-    `promethee_topsis` = "PROMETHEE  vs. TOPSIS ",
-    `wsm_topsis` = "WSM  vs. TOPSIS",
-    `wsm_promethee` = "WSM  vs. PROMETHEE",
-    `compare_weights` = "AHP and Directly Assign Weights"))) +
-  scale_fill_manual(values = custom_palette1) + 
-  theme(#axis.text.x=element_blank(),
-        #axis.text.y=element_blank(),
-        axis.ticks =element_blank(),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        plot.subtitle = element_text(size = 9,face = "italic"),
-        plot.title = element_text(size = 12, face = "bold"),
-        panel.background = element_blank(),
-        panel.border = element_rect(colour = "grey", fill=NA, size=0.8),
-        legend.position = "none",  # Turn off the legend,
-        strip.text = element_text(size = 12)
-        )
-
-fig1 
-#ggsave("graph.png", fig1, width = 10, height = 6, dpi = 300)
-```
-
+1. Difference between WSM and TOPSIS
+2. Difference between WSM and PROMETHEE
+3. Difference between WSM and AHP
+4. Difference between TOPSIS and PROMETHEE
+**5. Difference between TOPSIS and AHP**
+6. Difference between PROMETHEE and AHP
 
 ```{r}
 
-my_sort <- c("promethee_topsis", "wsm_topsis", "wsm_promethee", "compare_weights")
+# if negative, it means that the first one over-rank the second one
+# if positive, it means that the first one under-rank the second one
+compare<- final %>% 
+  mutate(wsm_topsis = wsm_rank - topsis_rank, # compare the rank between wsm and topsis
+         wsm_promethee = wsm_rank - promethee_rank, # compare the rank between wsm and promethee
+         wsm_ahp = wsm_rank - ahptopsis_rank, # compare the rank between wsm and ahp
+         promethee_topsis = promethee_rank - topsis_rank, # compare the rank between topsis and promethee
+         topsis_ahp = topsis_rank - ahptopsis_rank, # compare the rank between topsis and ahp
+         promethee_ahp = promethee_rank - ahptopsis_rank)  # compare the rank between promethee and topsis
 
 
+```
 
-# Your data manipulation and ggplot code
-plot <- compare %>% 
+
+```{r compare difference distribution 2}
+
+custom_palette1 <- c("#B2BF95", "#80A676", "#88BFBF", "#7EA1BF", "grey", "pink")
+my_sort <- c("promethee_topsis", "topsis_ahp", "wsm_topsis", "wsm_promethee", "wsm_ahp", "promethee_ahp")
+
+temp <- compare %>% 
   st_drop_geometry() %>% 
-  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, promethee_topsis, compare_weights, NAME)) %>%
-  pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "promethee_topsis", "compare_weights"),  
+  dplyr::select(c(uniqueID, promethee_topsis, topsis_ahp, wsm_topsis, wsm_promethee, wsm_ahp, promethee_ahp, NAME)) %>%
+  pivot_longer(cols = c("promethee_topsis", "topsis_ahp", "wsm_topsis", "wsm_promethee", "wsm_ahp", "promethee_ahp"),  
                names_to = "variable",        
                values_to = "value") %>% 
   ggplot(aes(x = as.numeric(factor(variable, levels = my_sort)))) +
@@ -879,6 +840,7 @@ plot <- compare %>%
   labs(title = "Distribution of Differences in Rank Between Different Methods",
        x = "Method",
        y = "Difference") +
+  theme_bw()
   theme(axis.text.x=element_blank(),
         axis.ticks =element_blank(),
         axis.title.x = element_blank(),
@@ -887,39 +849,114 @@ plot <- compare %>%
         plot.title = element_text(size = 12, face = "bold"),
         panel.background = element_blank(),
         panel.border = element_blank(),
-        legend.position = "none",  
         )
 
-# Print the plot
-print(plot)
 
-#ggsave("boxplot.png", plot, width = 10, height = 6, dpi = 300)
-
+# my_sort <- c("topsis_promethee", "topsis_ahp", "wsm_topsis", "wsm_promethee", "wsm_ahp", "promethee_ahp")
+ggsave("/Users/emzhou/Desktop/Paper/svg/violin.svg", temp, width = 10, height = 7)
 
 ```
 
+```{r}
+# map distribution of the criteria
+final %>% 
+  st_drop_geometry() %>%
+  dplyr::select(c(density, TSFCA, driving_pop, evse.nn, elec_cnt, parking.nn, policefire.nn, elect_use, zone_score)) %>%
+  pivot_longer(cols = c(density, TSFCA, driving_pop, evse.nn, elec_cnt, parking.nn, policefire.nn, elect_use, zone_score),  
+               names_to = "variable",        
+               values_to = "value") %>%
+  ggplot(aes(x = value)) +
+  geom_density(aes(fill = variable), alpha = 0.5) +
+  facet_wrap(~variable, scales = "free") +
+  labs(title = "Distribution of Criteria",
+       x = "Value",
+       y = "Density")
+
+summary(final$elect_use)
+```
 
 
+```{r }
+
+
+final_sankey <- final %>%
+  mutate(topsis_percentile = percent_rank(topsis_rank),
+         wsm_percentile = percent_rank(wsm_rank),
+         promethee_percentile = percent_rank(promethee_rank),
+         ahp_percentile = percent_rank(ahptopsis_rank)) %>%
+  mutate(
+    topsis_cat = cut(topsis_percentile, breaks = c(-1, 0.2, 0.4, 0.6, 0.8, 1.1), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
+    wsm_cat = cut(wsm_percentile, breaks = c(-1, 0.2, 0.4, 0.6, 0.8, 1.1), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
+    promethee_cat = cut(promethee_percentile, breaks = c(-1, 0.2, 0.4, 0.6, 0.8, 1.1), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
+    ahp_cat = cut(ahp_percentile, breaks = c(-1, 0.2, 0.4, 0.6, 0.8, 1.1), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%"))
+  )
+  
+final_sankey %>% 
+  dplyr::count(topsis_cat, wsm_cat, promethee_cat, ahp_cat) %>%
+  ggplot(., aes(axis1 = topsis_cat, axis2 = ahp_cat, axis3 = promethee_cat, axis4 = wsm_cat, y = n)) +
+  scale_x_discrete(limits = c("TOPSIS", "AHP", "PROMETHEE", "WSM"), 
+                   expand = c(.05, .5)) +
+  geom_alluvium(aes(fill = topsis_cat), alpha = 0.8) +  # Fill based on initial ranking
+  geom_stratum(color = "grey") + 
+  geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3) + 
+  scale_fill_manual(values = custom_palette) +
+  theme_bw() +
+  labs(title = "Rank Transitions Between Global and Local TOPSIS Methods",
+       x = "Ranking Method", y = "Grid Count")
+
+```
+
+```{r}
+
+# percent of identical positions in different decision-making methods
+final_sankey %>% 
+  dplyr::select(topsis_cat, wsm_cat, promethee_cat, ahp_cat) %>%
+  #filter(promethee_cat == wsm_cat) %>%
+  #filter(ahp_cat == wsm_cat) %>%
+  # filter(promethee_cat == ahp_cat) %>%
+  #filter(topsis_cat == ahp_cat) %>%
+  #filter(topsis_cat == wsm_cat) %>%
+  #filter(topsis_cat == promethee_cat) %>%
+  filter(wsm_cat == ahp_cat & ahp_cat == promethee_cat) 
+
+```
+
+Pct of identical positions between TOPSIS and WSM: 772 / 1212 = 63.7%
+Pct of identical positions between TOPSIS and PROMETHEE: 750 / 1212 = 61.9%
+Pct of identical positions between WSM and PROMETHEE: 848 / 1212 = 70.0%
+Pct of identical positions between TOPSIS and AHP-Topsis: 805 / 1212 = 66.4%
+Pct of identical positions between WSM and AHP-Topsis: 696 / 1212 = 57.4%
+Pct of identical positions between PROMETHEE and AHP-Topsis: 654 / 1212 = 54.0%
+Pct of identical positions between TOPSIS, AHP-TOPSIS, and WSM: 568 / 1212 = 46.9%
+Pct of identical positions between TOPSIS, AHP-TOPSIS, and PROMETHEE: 548 / 121 = 45.2%
+Pct of identical positions between WSM, AHP-TOPSIS, and PROMETHEE: 545 / 1212 = 45.0%
+Pct of identical positions between all four methods: 472 / 1212 = 38.9%
+
+
+
+## Visualize Spatial Rank Variability 
 
 ```{r fig.height=7, fig.width=10}
 
-custom_palette2 <- c("#80A676", "white", "#7EA1BF")
+custom_palette2 <- c("#e8623f", "white", "#57748d")
 
 
-fig2 <- compare %>% 
-  dplyr::select(c(uniqueID, wsm_topsis, wsm_promethee, promethee_topsis, compare_weights, NAME)) %>%
-  pivot_longer(cols = c("wsm_topsis", "wsm_promethee", "promethee_topsis", "compare_weights"),  
+compare %>% 
+  dplyr::select(c(uniqueID, promethee_topsis, topsis_ahp, wsm_topsis, wsm_promethee, wsm_ahp, promethee_ahp, NAME)) %>%
+  pivot_longer(cols = c("promethee_topsis", "wsm_topsis",  "wsm_ahp", "promethee_ahp"),  
                names_to = "variable",       
                values_to = "value") %>% 
-  filter(variable == "promethee_topsis" | variable == "wsm_topsis") %>% 
+  # filter(variable == "promethee_topsis" | variable == "wsm_topsis") %>% 
   ggplot() +
   geom_sf(aes(fill = value), color = "grey") +
   labs(title = "Ranking Difference between TOPSIS and Other Approaches") +
   facet_wrap(~ variable, labeller= labeller(variable = c(
-    `promethee_topsis` = "PROMETHEE  vs. TOPSIS ",
+    `promethee_topsis` = "PROMETHEE vs. TOPSIS",
+    `topsis_ahp` = "TOPSIS  vs. AHP",
     `wsm_topsis` = "WSM  vs. TOPSIS",
     `wsm_promethee` = "WSM  vs. PROMETHEE",
-    `compare_weights` = "AHP and Directly Assign Weights"))) +
+    `wsm_ahp` = "WSM  vs. AHP",
+    `promethee_ahp` = "PROMETHEE  vs. AHP"))) +
   scale_fill_gradientn(colors = custom_palette2, 
                        name = "Rank Difference", 
                        na.value = "grey50") + 
@@ -932,10 +969,20 @@ fig2 <- compare %>%
         plot.title = element_text(size = 12, face = "bold"),
         panel.background = element_blank()    )
 
-fig2
-#ggsave("plot.png", fig2, width = 10, height = 6, dpi = 300)
+
 
 ```
+
+
+
+
+```{r}
+
+st_write(compare, here::here("data", "derived", "compare.geojson"), driver = "GeoJSON")
+
+
+```
+
 
 WSM: easy to understand and implement, but assumes that criteria are independent of each other and ranking is highly dependent on the weights
 
@@ -959,6 +1006,7 @@ Third, at what scale should we implement local MCDA? In other words, what do we 
 
 Finally, we would also like to point out that doing so has its particular implications in terms of GIS application, planning, and policymaking. In terms of smart cities planning, having targeted EVSE deployment strategies for high-density vs. suburban areas can help optimize the use of limited resources and ensures that underserved communities receive fair access to EV. Considering global MCDA - it only draws attention to a particular part of the city, which while indeed in need of more EVSE, this might overlook the needs of other neighborhoods. A neighborhood ranked slighly lower in the global MCDA might still need a charging station, or even maybe ranked higher in the local MCDA. As for policymaking, doing so allows us to have cluster-specific incentives for EV adoption or charging subsidies.
 
+## Cluster Determination
 
 ```{r pca for 9 criteria}
 
@@ -1065,32 +1113,6 @@ ggbiplot(pca_fishnet,
   geom_vline(xintercept = 0, color = "grey", linewidth = 0.4)
 ```
 
-```{r}
-## plot top 20 loadings
-top_k <- 5
-
-## get pc1 and pc2
-pc1 <- data.frame(loading = pca_fishnet$rotation[,1],
-                  var = rownames(pca_fishnet$rotation),
-                  pc = "PC1") 
-pc2 <- data.frame(loading = pca_fishnet$rotation[,2],
-                  var = rownames(pca_fishnet$rotation),
-                  pc = "PC2") 
-
-# get top_k loadings of pc1 and pc2
-pc1_top <- pc1 %>% arrange(-loading) %>% slice(1:top_k)
-pc2_top <- pc2 %>% arrange(-loading) %>% slice(1:top_k)
-
-rbind(pc1_top, pc2_top) %>%
-  ggplot(aes(x = reorder(var, -loading), y = loading)) +
-  geom_point() +
-  ggtitle("Top loadings") +
-  xlab("Gene") +
-  facet_wrap(~pc, nrow = 1, scales = "free_x") +
-  theme_bw() + 
-  theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 1))
-```
-
 
 ```{r}
 
@@ -1179,6 +1201,7 @@ cluster_summary <- fishnet_clustered %>%
 cluster_summary 
 ```
 
+## Cluster Characteristics and Local Weights
 
 ```{r}
 
@@ -1195,27 +1218,27 @@ ggplot(fishnet_clustered, aes(x = PC1, y = PC2, color = Cluster)) +
         panel.border = element_rect(colour = "grey", fill=NA, linewidth =0.8))
 ```
 
+
 ```{r}
 
 fishnet_clustered %>%
   st_drop_geometry() %>%
   dplyr::select(Cluster, driving_pop, evse.nn, elec_cnt, parking.nn) %>%
   mutate(
-         evse.nn = scale_values(evse.nn),
-         driving_pop = scale_values(driving_pop),
-         elec_cnt = scale_values(elec_cnt),
-         parking.nn= scale_values(parking.nn)
-         ) %>% 
-  pivot_longer(cols = -Cluster, names_to = "Variable", values_to = "Scaled_Value") %>% 
-  ggplot(., aes(x = as.factor(Cluster), y = Scaled_Value, fill = as.factor(Cluster))) +
-  geom_violin(trim = FALSE, size = 0.4)+
-  geom_boxplot(alpha = 0.7) +
+    evse.nn = scale_values(evse.nn),
+    driving_pop = scale_values(driving_pop),
+    elec_cnt = scale_values(elec_cnt),
+    parking.nn = scale_values(parking.nn),
+  ) %>%
+  pivot_longer(cols = -Cluster, names_to = "Variable", values_to = "Scaled_Value") %>%
+  ggplot(aes(x = Scaled_Value, fill = as.factor(Cluster))) +
+  geom_density(alpha = 0.6) +
   scale_fill_brewer(palette = "Set3") +
-  facet_wrap(~Variable, scales = "free_y") +  # Facet by variable
+  facet_wrap(~Variable, scales = "free") +
   labs(
-    title = "Distribution of Scaled Criteria by Cluster",
-    x = "Cluster",
-    y = "Scaled Value (0-1)",
+    title = "Density Distribution of Scaled Criteria by Cluster",
+    x = "Scaled Value",
+    y = "Density",
     fill = "Cluster"
   ) +
   theme_minimal() +
@@ -1223,11 +1246,11 @@ fishnet_clustered %>%
     plot.title = element_text(size = 14, face = "bold"),
     axis.title = element_text(size = 12),
     axis.text.x = element_text(size = 10),
-    legend.position = "none",  # Remove legend since colors already represent clusters
-    strip.text = element_text(size = 11, face = "bold")  # Styling facet labels
+    legend.position = "bottom",
+    strip.text = element_text(size = 11, face = "bold")
   )
-```
 
+```
 
 Now we need to separate the fishnet data into 4 clusters based on the PCA-transformed data. We will then conduct MCDA for each cluster separately. This allows us to capture local variations in EVSE suitability and make more informed decisions. 
 
@@ -1285,319 +1308,12 @@ We will perform three sets of comparison.
 - Local MCDA (Global Weights) applies the citywide weight structure within each cluster, allowing us to observe how the same criteria influence different local contexts.
 
 
-
 We will use the TOPSIS method to test out the local MCDA model, since TOPSIS was one of the methods used in global MCDA. Running WSM and PROMETHEE locally would introduce more layers of variation, making it harder to isolate the impact of local weight adjustments versus methodological differences. 
 Also, TOPSIS avoids WSM's linearity issue. WSM is purely additive, meaning it treats all weighted values as independent and does not consider how alternatives compare to an ideal or worst-case scenario.This can be problematic in localized MCDA where extreme values may exist (e.g., a cluster with very high EV ownership but poor accessibility).
 PROMETHEE is a pairwise ranking method, meaning it compares each alternative to every other alternative, which can introduce ranking biases when dealing with smaller, more homogeneous clusters.TOPSIS is computationally less expensive than PROMETHEE, making it easier to run on multiple clusters without excessive processing time.
 
-```{r original percentile}
 
-# Get the original rank and compute percentile rank 
-# then join it with the result from local MCDA
-# to compare whether the percentile rank is higher or lower than the global MCDA
-final_percentile <- final %>% 
-  dplyr::select(NAME, uniqueID, avg_rank, topsis_rank, wsm_rank) %>%
-  mutate(
-    avg_percentile = percent_rank(avg_rank) * 100,
-    wsm_percentile = percent_rank(wsm_rank) * 100,
-    topsis_percentile = percent_rank(topsis_rank) * 100)
-  
-```
-
-
-## Try Local WSM
-
-
-```{r}
-# weights_c1 <- c(0.12, 0.14, 0.12, 0.16, 0.16, 0.08, 0.06, 0.06, 0.10)
-WSM_c1 <- cluster1 %>% 
-  mutate(scl_density = scale_values(density),
-         scl_acc = scale_values(TSFCA),
-         scl_drivingpop = scale_values(driving_pop),
-         scl_evse = scale_values(evse.nn),
-         scl_elec = scale_values(elec_cnt),
-         scl_parking = scale_values(parking.nn),
-         scl_policefire = scale_values(policefire.nn),
-         scl_elect_use = scale_values(elect_use)
-         ) %>% 
-  mutate(scl_evse_re = 0 - scl_evse + 1,
-         scl_acc_re = 0 - scl_acc + 1, 
-         scl_parking_re = 0 - scl_parking + 1,
-         scl_policefire_re = 0 - scl_policefire + 1) %>% 
-  mutate(score = 0.12*scl_evse_re + 0.14*scl_density + 0.12*scl_drivingpop + 0.16*scl_acc_re + 0.16*scl_elec + 0.08*scl_parking_re + 0.06*scl_policefire_re + 0.06*zone_score + 0.10*scl_elect_use) %>% 
-  dplyr::select(c(uniqueID, score)) %>% 
-  mutate(wsm_rank_c1 = min_rank(desc(score))) %>% 
-  mutate(wsm_percentile_c1 = percent_rank(wsm_rank_c1) * 100)
-
-#weights_c2 <- c(0.14, 0.08, 0.08, 0.10, 0.12, 0.12, 0.06, 0.10, 0.20)
-WSM_c2 <- cluster2 %>% 
-  mutate(scl_density = scale_values(density),
-         scl_acc = scale_values(TSFCA),
-         scl_drivingpop = scale_values(driving_pop),
-         scl_evse = scale_values(evse.nn),
-         scl_elec = scale_values(elec_cnt),
-         scl_parking = scale_values(parking.nn),
-         scl_policefire = scale_values(policefire.nn),
-         scl_elect_use = scale_values(elect_use)
-         ) %>% # now inverse some scales
-  mutate(scl_evse_re = 0 - scl_evse + 1,
-         scl_acc_re = 0 - scl_acc + 1, 
-         scl_parking_re = 0 - scl_parking + 1,
-         scl_policefire_re = 0 - scl_policefire + 1) %>% 
-  mutate(score = 0.14*scl_evse_re + 0.08*scl_density + 0.08*scl_drivingpop + 0.10*scl_acc_re + 0.12*scl_elec + 0.12*scl_parking_re + 0.06*scl_policefire_re + 0.10*zone_score + 0.20*scl_elect_use) %>% 
-  dplyr::select(c(uniqueID, score)) %>%
-  mutate(wsm_rank_c2 = min_rank(desc(score))) %>%
-  mutate(wsm_percentile_c2 = percent_rank(wsm_rank_c2) * 100)
-
-#weights_c3 <- c(0.20, 0.10, 0.12, 0.14, 0.18, 0.06, 0.06, 0.06, 0.08)
-WSM_c3 <- cluster3 %>% 
-  mutate(scl_density = scale_values(density),
-         scl_acc = scale_values(TSFCA),
-         scl_drivingpop = scale_values(driving_pop),
-         scl_evse = scale_values(evse.nn),
-         scl_elec = scale_values(elec_cnt),
-         scl_parking = scale_values(parking.nn),
-         scl_policefire = scale_values(policefire.nn),
-         scl_elect_use = scale_values(elect_use)
-         ) %>% 
-  mutate(scl_evse_re = 0 - scl_evse + 1,
-         scl_acc_re = 0 - scl_acc + 1, 
-         scl_parking_re = 0 - scl_parking + 1,
-         scl_policefire_re = 0 - scl_policefire + 1) %>% 
-  mutate(score = 0.20*scl_evse_re + 0.10*scl_density + 0.12*scl_drivingpop + 0.14*scl_acc_re + 0.18*scl_elec + 0.06*scl_parking_re + 0.06*scl_policefire_re + 0.06*zone_score + 0.08*scl_elect_use) %>% 
-  dplyr::select(c(uniqueID, score)) %>%
-  mutate(wsm_rank_c3 = min_rank(desc(score))) %>%
-  mutate(wsm_percentile_c3 = percent_rank(wsm_rank_c3) * 100)
-
-#weights_c4 <- c(0.16, 0.14, 0.12, 0.18, 0.12, 0.08, 0.04, 0.06, 0.10)
-WSM_c4 <- cluster4 %>% 
-  mutate(scl_density = scale_values(density),
-         scl_acc = scale_values(TSFCA),
-         scl_drivingpop = scale_values(driving_pop),
-         scl_evse = scale_values(evse.nn),
-         scl_elec = scale_values(elec_cnt),
-         scl_parking = scale_values(parking.nn),
-         scl_policefire = scale_values(policefire.nn),
-         scl_elect_use = scale_values(elect_use)
-         ) %>% 
-  mutate(scl_evse_re = 0 - scl_evse + 1,
-         scl_acc_re = 0 - scl_acc + 1, 
-         scl_parking_re = 0 - scl_parking + 1,
-         scl_policefire_re = 0 - scl_policefire + 1) %>% 
-  mutate(score = 0.16*scl_evse_re + 0.14*scl_density + 0.12*scl_drivingpop + 0.18*scl_acc_re + 0.12*scl_elec + 0.08*scl_parking_re + 0.04*scl_policefire_re + 0.06*zone_score + 0.10*scl_elect_use) %>% 
-  dplyr::select(c(uniqueID, score)) %>%
-  mutate(wsm_rank_c4 = min_rank(desc(score))) %>%
-  mutate(wsm_percentile_c4 = percent_rank(wsm_rank_c4) * 100)
-
-```
-
-
-```{r test with original}
-
-# using original weights
-# this is evse.nn, density, driving_pop, TSFCA, elec_cnt, parking.nn, policefire.nn, zone score, elect_use
-# weights_original <- c(0.18, 0.12, 0.1, 0.12, 0.15, 0.1, 0.05, 0.05, 0.13)
-
-WSM_c1_org <- cluster1 %>% 
-  mutate(scl_density = scale_values(density),
-         scl_acc = scale_values(TSFCA),
-         scl_drivingpop = scale_values(driving_pop),
-         scl_evse = scale_values(evse.nn),
-         scl_elec = scale_values(elec_cnt),
-         scl_parking = scale_values(parking.nn),
-         scl_policefire = scale_values(policefire.nn),
-         scl_elect_use = scale_values(elect_use)
-         ) %>% 
-  mutate(scl_evse_re = 0 - scl_evse + 1,
-         scl_acc_re = 0 - scl_acc + 1, 
-         scl_parking_re = 0 - scl_parking + 1,
-         scl_policefire_re = 0 - scl_policefire + 1) %>% 
-  mutate(score = 0.18*scl_evse_re + 0.12*scl_density + 0.1*scl_drivingpop + 0.12*scl_acc_re + 0.15*scl_elec + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.13*scl_elect_use) %>% 
-  dplyr::select(c(uniqueID, score)) %>% 
-  mutate(wsm_rank_c1_org = min_rank(desc(score))) %>% 
-  mutate(wsm_percentile_c1_org = percent_rank(wsm_rank_c1_org) * 100)
-
-
-WSM_c2_org <- cluster2 %>%
-  mutate(scl_density = scale_values(density),
-         scl_acc = scale_values(TSFCA),
-         scl_drivingpop = scale_values(driving_pop),
-         scl_evse = scale_values(evse.nn),
-         scl_elec = scale_values(elec_cnt),
-         scl_parking = scale_values(parking.nn),
-         scl_policefire = scale_values(policefire.nn),
-         scl_elect_use = scale_values(elect_use)
-         ) %>% 
-  mutate(scl_evse_re = 0 - scl_evse + 1,
-         scl_acc_re = 0 - scl_acc + 1, 
-         scl_parking_re = 0 - scl_parking + 1,
-         scl_policefire_re = 0 - scl_policefire + 1) %>% 
-  mutate(score = 0.18*scl_evse_re + 0.12*scl_density + 0.1*scl_drivingpop + 0.12*scl_acc_re + 0.15*scl_elec + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.13*scl_elect_use) %>% 
-  dplyr::select(c(uniqueID, score)) %>%
-  mutate(wsm_rank_c2_org = min_rank(desc(score))) %>%
-  mutate(wsm_percentile_c2_org = percent_rank(wsm_rank_c2_org) * 100)
-  
-WSM_c3_org <- cluster3 %>%
-  mutate(scl_density = scale_values(density),
-         scl_acc = scale_values(TSFCA),
-         scl_drivingpop = scale_values(driving_pop),
-         scl_evse = scale_values(evse.nn),
-         scl_elec = scale_values(elec_cnt),
-         scl_parking = scale_values(parking.nn),
-         scl_policefire = scale_values(policefire.nn),
-         scl_elect_use = scale_values(elect_use)
-         ) %>% 
-  mutate(scl_evse_re = 0 - scl_evse + 1,
-         scl_acc_re = 0 - scl_acc + 1, 
-         scl_parking_re = 0 - scl_parking + 1,
-         scl_policefire_re = 0 - scl_policefire + 1) %>% 
-  mutate(score = 0.18*scl_evse_re + 0.12*scl_density + 0.1*scl_drivingpop + 0.12*scl_acc_re + 0.15*scl_elec + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.13*scl_elect_use) %>% 
-  dplyr::select(c(uniqueID, score)) %>%
-  mutate(wsm_rank_c3_org = min_rank(desc(score))) %>%
-  mutate(wsm_percentile_c3_org = percent_rank(wsm_rank_c3_org) * 100)
-
-WSM_c4_org <- cluster4 %>%
-  mutate(scl_density = scale_values(density),
-         scl_acc = scale_values(TSFCA),
-         scl_drivingpop = scale_values(driving_pop),
-         scl_evse = scale_values(evse.nn),
-         scl_elec = scale_values(elec_cnt),
-         scl_parking = scale_values(parking.nn),
-         scl_policefire = scale_values(policefire.nn),
-         scl_elect_use = scale_values(elect_use)
-         ) %>% 
-  mutate(scl_evse_re = 0 - scl_evse + 1,
-         scl_acc_re = 0 - scl_acc + 1, 
-         scl_parking_re = 0 - scl_parking + 1,
-         scl_policefire_re = 0 - scl_policefire + 1) %>% 
-  mutate(score = 0.18*scl_evse_re + 0.12*scl_density + 0.1*scl_drivingpop + 0.12*scl_acc_re + 0.15*scl_elec + 0.1*scl_parking_re + 0.05*scl_policefire_re + 0.05*zone_score + 0.13*scl_elect_use) %>% 
-  dplyr::select(c(uniqueID, score)) %>%
-  mutate(wsm_rank_c4_org = min_rank(desc(score))) %>%
-  mutate(wsm_percentile_c4_org = percent_rank(wsm_rank_c4_org) * 100)
-
-```
-
-
-
-```{r}
-
-# join with original percentile
-WSM_c1_cp <- WSM_c1 %>% 
-  st_drop_geometry() %>%
-  left_join(WSM_c1_org %>% dplyr::select(uniqueID, wsm_percentile_c1_org), by = "uniqueID") %>%
-  left_join(final_percentile %>% dplyr::select(uniqueID, 
-                                               NAME, 
-                                               wsm_percentile, 
-                                               avg_percentile,
-                                          ), by = "uniqueID") %>%
-  dplyr::select(NAME, uniqueID, avg_percentile, wsm_percentile, wsm_percentile_c1, wsm_percentile_c1_org)
-
-WSM_c2_cp <- WSM_c2 %>%
-  st_drop_geometry() %>%
-  left_join(WSM_c2_org %>% dplyr::select(uniqueID, wsm_percentile_c2_org), by = "uniqueID") %>%
-  left_join(final_percentile %>% dplyr::select(uniqueID, 
-                                               NAME, 
-                                               wsm_percentile, 
-                                               avg_percentile,
-                                              
-                                          ), by = "uniqueID") %>%
-  dplyr::select(NAME, uniqueID, avg_percentile, wsm_percentile, wsm_percentile_c2, wsm_percentile_c2_org)
-
-WSM_c3_cp <- WSM_c3 %>%
-  st_drop_geometry() %>%
-  left_join(WSM_c3_org %>% dplyr::select(uniqueID, wsm_percentile_c3_org), by = "uniqueID") %>%
-  left_join(final_percentile %>% dplyr::select(uniqueID, 
-                                               NAME, 
-                                               wsm_percentile, 
-                                               avg_percentile,
-                                              
-                                          ), by = "uniqueID") %>%
-  dplyr::select(NAME, uniqueID, avg_percentile, wsm_percentile, wsm_percentile_c3, wsm_percentile_c3_org)
-
-WSM_c4_cp <- WSM_c4 %>%
-  st_drop_geometry() %>%
-  left_join(WSM_c4_org %>% dplyr::select(uniqueID, wsm_percentile_c4_org), by = "uniqueID") %>%
-  left_join(final_percentile %>% dplyr::select(uniqueID, 
-                                               NAME, 
-                                               wsm_percentile, 
-                                               avg_percentile,
-                                              
-                                          ), by = "uniqueID") %>%
-  dplyr::select(NAME, uniqueID, avg_percentile, wsm_percentile, wsm_percentile_c4, wsm_percentile_c4_org)
-  
-
-
-```
-
-
-```{r}
-
-WSM_c3_cp %>% 
-  ggplot(aes(x = wsm_percentile , y = wsm_percentile_c3)) +
-  geom_point() +
-  geom_smooth(method = "lm", color = "blue", se = FALSE) + 
-  labs(title = "Comparison of Global and Local TOPSIS Percentile Rank for Cluster 1",
-       x = "Global Percentile Rank",
-       y = "Local Percentile Rank") +
-  theme_minimal() +
-  theme(plot.subtitle = element_text(size = 12,face = "italic"),
-        plot.title = element_text(size = 15, face = "bold"), 
-        axis.text.x=element_text(size=8),
-        axis.text.y=element_text(size=8), 
-        axis.title=element_text(size=9), 
-        panel.background = element_blank(),
-        panel.border = element_rect(colour = "grey", fill=NA, linewidth =0.8))
-
-model1_wsm <- lm(wsm_percentile_c4 ~ wsm_percentile, data = WSM_c4_cp)
-model2_wsm<- lm(wsm_percentile_c4 ~ wsm_percentile_c4_org, data = WSM_c4_cp)
-model3_wsm <- lm(wsm_percentile_c4_org ~ wsm_percentile , data = WSM_c4_cp)
-
-library(stargazer)
-stargazer(model1_wsm, model2_wsm, model3_wsm, type = "text")
-```
-
-Cluster 1: 
-Local TOPSIS (Local Weights) vs. Global TOPSIS --- 2.800 (0.787 Rsq)
-Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.973 (0.947 Rsq)
-Local TOPSIS (Global Weights) vs. Global TOPSIS --- 0.269 (0.724 Rsq)
-
-
-Cluster 2: 
-Local TOPSIS (Local Weights) vs. Global TOPSIS --- 1.240 (0.795 Rsq)
-Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.987 (0.975 Rsq)
-Local TOPSIS (Global Weights) vs. Global TOPSIS --- 0.654 (0.821 Rsq)
-
-Cluster 3:
-Local TOPSIS (Local Weights) vs. Global TOPSIS --- 1.060 (0.904 Rsq)
-Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.982 (0.965 Rsq)
-Local TOPSIS (Global Weights) vs. Global TOPSIS --- 0.841 (0.879 Rsq) 
-
-Cluster 4: 
-Local TOPSIS (Local Weights) vs. Global TOPSIS --- 1.220 (0.725 Rsq)
-Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.977 (0.954 Rsq)
-Local TOPSIS (Global Weights) vs. Global TOPSIS --- 0.609 (0.76 Rsq)
-
-High R² (0.947–0.975) for Local MCDA (Global Weights) vs. Local MCDA (Local Weights) across all clusters suggests that applying local weights slightly modifies but does not drastically change rankings. 
-Lower slopes and R² for Local MCDA (Local Weights) vs. Global MCDA (especially in Cluster 1 and Cluster 4) indicate that the most significant rank shifts occur when transitioning from a global model to a local model.
-
-In cluster 1, the slope of 2.800 for Local (Local Weights) vs. Global MCDA suggests extreme shifts in ranking, with certain grids ranking much higher or much lower locally than globally. Locally, some areas within the core have high demand but remain underserved, which global analysis fails to highlight.
-
-In cluster 2, the slope for Local (Local Weights) vs. Global MCDA is 1.240 with R² of 0.795, suggesting that while local factors alter rankings, the overall prioritization is more aligned with the global MCDA compared to Cluster 1.
-
-In cluster 3, the slope of 1.060 for Local (Local Weights) vs. Global MCDA, with an R² of 0.904, indicates minimal ranking disruptions between global and local approaches.
-
-In cluster 4, the slope for Local (Local Weights) vs. Global MCDA is 1.220 with an R² of 0.725, suggesting substantial local ranking shifts. Additionally, the slope of 0.609 for Global MCDA vs. Local MCDA (Global Weights) is among the lowest, indicating that local constraints heavily influence rankings.
-
-The choice of local vs. global scale significantly alters rankings, particularly in areas with high spatial and socioeconomic variability (e.g., Cluster 1 and Cluster 4).Localized MCDA is crucial for equity-driven EVSE planning, as global approaches may overlook accessibility barriers in disadvantaged communities. Areas with high demand but infrastructure gaps (e.g., Cluster 1 and Cluster 4) require localized adjustments.
-
-See an example here: 
-842 Frankford. in Cluster 4
-Ranked 45 in Global
-Ranked 16 in Local
-
-
-
-## Try Local TOPSIS
+## Local MCDA Using TOPSIS
 
 ```{r construct performance table for local MCDA}
 
@@ -1676,7 +1392,7 @@ rownames(performanceTable_c4) <- uniqueIDs_c4
 # we need one set for each cluster
 # reverse is min 
 # by order, this is evse.nn, density, driving_pop, TSFCA, elec_cnt, parking.nn, policefire.nn, zone score, elect_use
-weights_original <- c(0.18, 0.12, 0.1, 0.12, 0.15, 0.1, 0.05, 0.05, 0.13)
+weights_original <- c(0.18, 0.12, 0.10, 0.12, 0.15, 0.10, 0.05, 0.05, 0.13)
 weights_c1 <- c(0.12, 0.14, 0.12, 0.16, 0.16, 0.08, 0.06, 0.06, 0.10)
 weights_c2 <- c(0.14, 0.08, 0.08, 0.10, 0.12, 0.12, 0.06, 0.10, 0.20)
 weights_c3 <- c(0.20, 0.10, 0.12, 0.14, 0.18, 0.06, 0.06, 0.06, 0.08)
@@ -1754,6 +1470,21 @@ TOPSIS_c4_org <- data.frame(uniqueID = names(overall_c4_org), values = overall_c
 ```
 
 
+might not need this 
+```{r original percentile}
+
+# Get the original rank and compute percentile rank 
+# then join it with the result from local MCDA
+# to compare whether the percentile rank is higher or lower than the global MCDA
+final_percentile <- final %>% 
+  dplyr::select(NAME, uniqueID, avg_rank, topsis_rank, wsm_rank) %>%
+  mutate(
+    avg_percentile = percent_rank(avg_rank) * 100,
+    topsis_percentile = percent_rank(topsis_rank) * 100)
+  
+```
+
+might not need this as well
 ```{r compare global and local }
 
 # quick check for cluster 1
@@ -1762,14 +1493,12 @@ TOPSIS_c1_cp  <- TOPSIS_c1 %>%
   left_join(final_percentile %>% dplyr::select(uniqueID, 
                                                NAME, 
                                                topsis_percentile, 
-                                               avg_percentile,
-                                              
-                                          ), by = "uniqueID") %>%
+                                               avg_percentile), by = "uniqueID") %>%
   dplyr::select(NAME, uniqueID, avg_percentile, topsis_percentile, topsis_percentile_c1, topsis_percentile_c1_org)
 
 # quick check for cluster 2
 TOPSIS_c2_cp  <- TOPSIS_c2 %>% 
-  left_join(TOPSIS_c2_org %>% dplyr::select(uniqueID, topsis_percentile_c2_org), by = "uniqueID") %>%
+  left_join(TOPSIS_c2_org %>% dplyr::select(uniqueID, topsis_rank_c1_org, topsis_percentile_c2_org), by = "uniqueID") %>%
   left_join(final_percentile %>% dplyr::select(uniqueID, 
                                                NAME, 
                                                topsis_percentile, 
@@ -1805,36 +1534,77 @@ TOPSIS_c4_cp  <- TOPSIS_c4 %>%
 global_local <- TOPSIS %>% 
   mutate(global_val = values) %>% 
   mutate(global_rank = topsis_rank) %>% 
-  left_join(TOPSIS_c1 %>% mutate(c1_val = values) %>% dplyr::select(uniqueID, c1_val), by = "uniqueID") %>%
-  left_join(TOPSIS_c2 %>% mutate(c2_val = values) %>% dplyr::select(uniqueID, c2_val), by = "uniqueID") %>%
-  left_join(TOPSIS_c3 %>% mutate(c3_val = values) %>% dplyr::select(uniqueID, c3_val), by = "uniqueID") %>%
-  left_join(TOPSIS_c4 %>% mutate(c4_val = values) %>% dplyr::select(uniqueID, c4_val), by = "uniqueID") %>%
+  left_join(TOPSIS_c1 %>% 
+              mutate(c1_val = values, cluster_1 = "1") %>% 
+              dplyr::select(uniqueID, c1_val, cluster_1), by = "uniqueID") %>%
+  left_join(TOPSIS_c1_org %>% 
+              mutate(c1_val_org = values) %>% 
+              dplyr::select(uniqueID, c1_val_org), by = "uniqueID") %>%
+  left_join(TOPSIS_c2 %>% 
+              mutate(c2_val = values, cluster_2 = "2") %>% 
+              dplyr::select(uniqueID, c2_val, cluster_2), by = "uniqueID") %>%
+  left_join(TOPSIS_c2_org %>%
+              mutate(c2_val_org = values) %>% 
+              dplyr::select(uniqueID, c2_val_org), by = "uniqueID") %>%
+  left_join(TOPSIS_c3 %>% 
+              mutate(c3_val = values, cluster_3 = "3") %>% 
+              dplyr::select(uniqueID, c3_val, cluster_3), by = "uniqueID") %>%
+  left_join(TOPSIS_c3_org %>%
+              mutate(c3_val_org = values) %>% 
+              dplyr::select(uniqueID, c3_val_org), by = "uniqueID") %>%
+  left_join(TOPSIS_c4 %>% 
+              mutate(c4_val = values, cluster_4 = "4") %>% 
+              dplyr::select(uniqueID, c4_val, cluster_4), by = "uniqueID") %>%
+  left_join(TOPSIS_c4_org %>%
+              mutate(c4_val_org = values) %>% 
+              dplyr::select(uniqueID, c4_val_org), by = "uniqueID") %>%
   mutate(local_val = coalesce(c1_val, c2_val, c3_val, c4_val)) %>%
+  mutate(cluster = coalesce(cluster_1, cluster_2, cluster_3, cluster_4)) %>%
   mutate(local_rank = min_rank(desc(local_val))) %>%
-  dplyr::select(uniqueID, global_val, global_rank, local_val, local_rank)
+  mutate(local_val_org = coalesce(c1_val_org, c2_val_org, c3_val_org, c4_val_org)) %>%
+  mutate(local_rank_org = min_rank(desc(local_val_org))) %>%
+  dplyr::select(uniqueID, global_val, global_rank, local_val, local_rank, local_val_org, local_rank_org, cluster)
   
 
 ```
 
 
+## Mapping Global and Local MCDA Results
 
-        
-```{r}
+```{r fig.height=8, fig.width=12}
 
 global_local_toplot <- fishnet_nowater %>% 
   dplyr::select(uniqueID, geometry) %>%
   left_join(global_local, by = "uniqueID")
 
-quantiles_glo <- classIntervals(global_local_toplot$global_val, n = 6, style = "quantile")
-quantiles_loc <- classIntervals(global_local_toplot$local_val, n = 6, style = "quantile")
+quantiles_glo <- classIntervals(global_local_toplot$global_val, n = 5, style = "quantile")
+quantiles_loc <- classIntervals(global_local_toplot$local_val, n = 5, style = "quantile")
+quantiles_loc_org <- classIntervals(global_local_toplot$local_val_org, n = 5, style = "quantile")
 
 global_local_toplot$quantile_glo <- cut(global_local_toplot$global_val, breaks = quantiles_glo$brks, include.lowest = TRUE)
 global_local_toplot$quantile_loc <- cut(global_local_toplot$local_val, breaks = quantiles_loc$brks, include.lowest = TRUE)
+global_local_toplot$quantile_loc_org <- cut(global_local_toplot$local_val_org, breaks = quantiles_loc_org$brks, include.lowest = TRUE)
 
-ggplot()+
-  geom_sf(data=fishnet, color="black", fill="white") +
- geom_sf(data = global_local_toplot, aes(fill = quantile_loc), color = "black") +
-  scale_fill_brewer(palette = "Blues") + 
+glo <- ggplot()+
+ geom_sf(data=fishnet, color=NA, fill="white") +
+ geom_sf(data = global_local_toplot, aes(fill = quantile_glo), color = NA) +
+  scale_fill_manual(values = custom_palette) +
+  labs(title = "Global TOPSIS Score", fill = "Bins") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
+
+loc <- ggplot()+
+ geom_sf(data=fishnet, color=NA, fill="white") +
+ geom_sf(data = global_local_toplot, aes(fill = quantile_loc), color = NA) +
+  scale_fill_manual(values = custom_palette) +
   labs(title = "Local TOPSIS Score", fill = "Bins") +
   theme(axis.text.x=element_blank(),
         axis.text.y=element_blank(),
@@ -1847,58 +1617,218 @@ ggplot()+
         panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
         )
 
+
+loc_org <- ggplot()+
+ geom_sf(data=fishnet, color=NA, fill="white") +
+ geom_sf(data = global_local_toplot, aes(fill = quantile_loc_org), color = NA) +
+  scale_fill_manual(values = custom_palette) +
+  labs(title = "Local TOPSIS Score Original", fill = "Bins") +
+  theme(axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "grey", fill=NA, size=0.8)
+        )
+
+
+ggarrange(glo, loc, loc_org, ncol = 2, nrow = 2)
+
+```
+
+## Compute Spatial Statistics
+
+```{r}
+
+library(spdep)
+
+# global moran's I for global MCDA
+coords <-  st_coordinates(global_local_toplot %>% st_centroid()) 
+neighborList <- knn2nb(knearneigh(coords, 8))
+spatialWeights <- nb2listw(neighborList, style="W")
+
+moranTest_glo <- moran.mc(global_local_toplot$global_val, 
+                      spatialWeights, nsim = 999)
+
+moranTest_loc <- moran.mc(global_local_toplot$local_val, 
+                      spatialWeights, nsim = 999)
+
+expected_index <- mean(moranTest_glo$res)
+variance <- sum((moranTest_glo$res - expected_index)^2) / (length(moranTest_glo$res) - 1)
+z_score <- (moranTest_glo$statistic - expected_index) / sqrt(variance)
+
+expected_index_loc <- mean(moranTest_loc$res)
+variance_loc <- sum((moranTest_loc$res - expected_index_loc)^2) / (length(moranTest_loc$res) - 1)
+z_score_loc <- (moranTest_loc$statistic - expected_index_loc) / sqrt(variance_loc)
+
+glo_moran_summary <- data.frame(Statistic = c("Moran's Index", "Expected Index", "Variance", "z-score", "p-value"),
+                                Value = c(moranTest_glo$statistic, expected_index, variance, z_score, moranTest_glo$p.value))
+
+loc_moran_summary <- data.frame(
+  Statistic = c("Moran's Index", "Expected Index", "Variance", "z-score", "p-value"),
+  Value = c(moranTest_loc$statistic, expected_index_loc, variance_loc, z_score_loc, moranTest_loc$p.value)
+)
+
+
+ggplot(as.data.frame(moranTest_loc$res[c(1:999)]), aes(moranTest_loc$res[c(1:999)])) +
+  geom_histogram(binwidth = 0.01, fill = "black") +
+  geom_vline(aes(xintercept = moranTest_glo$statistic), colour = "#6E0E0A" ,lwd=1) +
+  labs(title = "Observed and Permuted Moran's I",
+       subtitle = "Observed Moran's I in Red",
+       x = "Moran's I",
+       y = "Count") +
+  theme_light() +   
+theme(plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"), 
+        axis.text.x=element_text(size=8),
+        axis.text.y=element_text(size=8), 
+        axis.title=element_text(size=10))
+
+glo_moran_summary
+loc_moran_summary
 ```
 
 
 ```{r}
 
-# using cluster 1 as an example
-TOPSIS_c1_cp %>% 
-  ggplot(aes(x = topsis_percentile_c1_org, y = topsis_percentile)) +
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
-  geom_smooth(method = "lm", color = "blue", se = FALSE) + 
-  labs(title = "Comparison of Global and Local TOPSIS Percentile Rank for Cluster 1",
-       x = "Global Percentile Rank",
-       y = "Local Percentile Rank") +
-  theme_minimal() +
-  theme(plot.subtitle = element_text(size = 12,face = "italic"),
-        plot.title = element_text(size = 15, face = "bold"), 
-        axis.text.x=element_text(size=8),
-        axis.text.y=element_text(size=8), 
-        axis.title=element_text(size=9), 
+library(sfdep)
+library(spdep)
+# Local Getis Ord 
+neigh_nbs <- global_local_toplot %>% 
+  mutate(
+    nb = st_knn(geometry, k = 8),  
+    wt = st_weights(nb),              
+    neigh_lag = st_lag(global_val, nb, wt)  
+  )
+
+
+gi_hot_spots <- neigh_nbs %>% 
+  mutate(Gi = local_g_perm(global_val, nb, wt, nsim = 999)) %>% 
+  unnest(Gi)
+
+
+gi_hot_spots <- gi_hot_spots %>%  
+  dplyr::select(gi, p_folded_sim, uniqueID) |> 
+  mutate(
+    classification = case_when(
+      # Classify based on the following criteria:
+      gi > 0 & p_folded_sim <= 0.01 ~ "Very hot",
+      gi > 0 & p_folded_sim <= 0.05 ~ "Hot",
+      gi > 0 & p_folded_sim <= 0.1 ~ "Somewhat hot",
+      gi < 0 & p_folded_sim <= 0.01 ~ "Very cold",
+      gi < 0 & p_folded_sim <= 0.05 ~ "Cold",
+      gi < 0 & p_folded_sim <= 0.1 ~ "Somewhat cold",
+      TRUE ~ "Insignificant"
+    ),    # Convert 'classification' into a factor for easier plotting
+    classification = factor(
+      classification,
+      levels = c("Very hot", "Hot", "Somewhat hot",
+                 "Insignificant",
+                 "Somewhat cold", "Cold", "Very cold")
+    )
+  )
+
+gi_hot_spots %>% 
+  ggplot() + 
+  geom_sf(aes(fill = classification), color = "black", lwd = 0.1) +
+  scale_fill_brewer(type = "div", palette = 6, name = "Classification") +
+  labs(title = "Spatial Hotspots and Coldspots") +
+  theme(legend.position="bottom",
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks =element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"),
         panel.background = element_blank(),
-        panel.border = element_rect(colour = "grey", fill=NA, linewidth =0.8))
+        panel.border = element_rect(colour = "grey", fill=NA, linewidth=0.8)
+        )
 
-  
-model1 <- lm(topsis_percentile_c1 ~ topsis_percentile, data = TOPSIS_c1_cp)
-model2<- lm(topsis_percentile_c1 ~ topsis_percentile_c1_org, data = TOPSIS_c1_cp)
-model3 <- lm(topsis_percentile_c1_org ~ topsis_percentile, data = TOPSIS_c1_cp)
-
-library(stargazer)
-stargazer(model1, model2, model3, type = "text")
+st_write(gi_hot_spots, "/Users/emzhou/Desktop/Paper/svg/globalhotspot.geojson", driver = "GeoJSON")
 ```
 
-Cluster 1: 
-Local TOPSIS (Local Weights) vs. Global TOPSIS --- 0.870 (0.305 Rsq)
-Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.901 (0.811 Rsq)
-Local TOPSIS (Global Weights) vs. Global TOPSIS --- 0.207 (0.106 Rsq)
+
+## Compute Distribution Statistics 
+
+```{r}
+
+# visualize the distribution of global and local MCDA scores
+ggplot(global_local, aes(x = global_val)) +
+  geom_histogram(binwidth = 0.01, fill = "black") +
+  geom_vline(aes(xintercept = mean(global_val)), colour = "#6E0E0A" ,lwd=1) +
+  labs(title = "Global MCDA Score Distribution",
+       subtitle = "Mean Score in Red",
+       x = "MCDA Score",
+       y = "Count") +
+  theme_light() +   
+  theme(plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"), 
+        axis.text.x=element_text(size=8),
+        axis.text.y=element_text(size=8), 
+        axis.title=element_text(size=10))
+
+# visualize the distribution of global and local MCDA scores
+ggplot(global_local, aes(x = local_val)) +
+  geom_histogram(binwidth = 0.01, aes(fill = cluster)) +
+  geom_vline(aes(xintercept = mean(global_val)), colour = "#6E0E0A" ,lwd=1) +
+  labs(title = "Global MCDA Score Distribution",
+       subtitle = "Mean Score in Red",
+       x = "MCDA Score",
+       y = "Count") +
+  theme_light() +   
+  theme(plot.subtitle = element_text(size = 9,face = "italic"),
+        plot.title = element_text(size = 12, face = "bold"), 
+        axis.text.x=element_text(size=8),
+        axis.text.y=element_text(size=8), 
+        axis.title=element_text(size=10))
+```
+
+```{r}
+summary(TOPSIS_c1$values)
+summary(TOPSIS_c2$values)
+summary(TOPSIS_c3$values)
+summary(TOPSIS_c4$values)
+```
 
 
-Cluster 2: 
-Local TOPSIS (Local Weights) vs. Global TOPSIS --- 0.979 (0.868 Rsq)
-Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.930 (0.865 Rsq)
-Local TOPSIS (Global Weights) vs. Global TOPSIS --- 0.802 (0.711 Rsq)
+This highlights some fundamental difference between how scores are distributed when moving from a single unified ranking (global) to localized evaluations.
 
-Cluster 3:
-Local TOPSIS (Local Weights) vs. Global TOPSIS --- 0.853 (0.727 Rsq)
-Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.911 (0.830 Rsq)
-Local TOPSIS (Global Weights) vs. Global TOPSIS --- 0.890 (0.794 Rsq)
+- Local MCDA scores are relative within each cluster.If Cluster 1 consists of grids that are all highly ranked globally, but they are similar to each other, then the range of local scores will be compressed.This could lead to Cluster 1 having the lowest local MCDA scores on average because the best grids in that cluster do not stand out as much relative to their peers. Cluster 1 has a tight range of values (0.160 to 0.592), which suggests that grids in Cluster 1 are more homogeneous and do not have strong local contrasts.
 
-Cluster 4: 
-Local TOPSIS (Local Weights) vs. Global TOPSIS --- 0.837 (0.416 Rsq)
-Local TOPSIS (Global Weights) vs. Local TOPSIS (Local Weights) --- 0.962 (0.925 Rsq)
-Local TOPSIS (Global Weights) vs. Global TOPSIS --- 0.491 (0.406)
+- In Cluster 3 and Cluster 4, the range of scores is much wider. This suggests that there’s greater differentiation among grids in these clusters, which can lead to higher local scores when some grids outperform others significantly.
+
+- This result suggests that while Cluster 1 is ranked highest in the global MCDA, it may be internally more uniform, meaning that within its local context, no grid significantly outperforms others. In a global setting, Cluster 1's grids might dominate the rankings. In a local setting, they are competing only within their cluster, where the differences between the best and worst-performing grids are small.Conversely, clusters with more variation internally (e.g., Cluster 3 and 4) will see bigger score differences in local MCDA. This supports the idea that local MCDA captures within-cluster variation better than global MCDA, while global MCDA favors clusters that perform well across all criteria.
+
+Homogeneity Compresses Scores. All grids in cluster 1 have good access to EVSE. Whereas in cluster 3 and 4, this suggests more variations and diverse cluster. If Cluster 1 had the best infrastructure or services in the global MCDA, it dominated the global rankings.
+
+Local MCDA is sensitive to intra-cluster variance.If Cluster 3 and Cluster 4 have a mix of very strong and weak grids, then some grids will rise to the top.
+
+## Furhter Comparisons Within Cluster
+
+```{r}
+
+# Cluster 1
+cor(global_local %>% filter(cluster == "1") %>% dplyr::select(global_val, local_val, local_val_org), method = "spearman")
+
+# Cluster 2
+cor(global_local %>% filter(cluster == "2") %>% dplyr::select(global_val, local_val, local_val_org), method = "spearman")
+
+# Cluster 3
+cor(global_local %>% filter(cluster == "3") %>% dplyr::select(global_val, local_val, local_val_org), method = "spearman")
+
+# Cluster 4
+cor(global_local %>% filter(cluster == "4") %>% dplyr::select(global_val, local_val, local_val_org), method = "spearman")
+
+```
+```{r}
+print(results)
+
+```
+
 
 This analysis explores the relationship between local and global TOPSIS approaches across four clusters, evaluating how different weighting strategies impact decision-making outcomes. Correlation coefficients (r) and R-squared (R²) values provide insights into the alignment between methods and the extent to which local preferences (either local or global weights) deviate from global decision-making frameworks.
 
@@ -1925,89 +1855,42 @@ The moderate agreement between Local TOPSIS (Local Weights) and Global TOPSIS (r
 
 > In this case, a strictly global approach could misrepresent local priorities. Local weightings should be prioritized in decision models to ensure that rankings reflect actual on-the-ground conditions.
 
-Clusters 1 and 4 exhibit significant local variation, suggesting global decision models require substantial adaptation before implementation.
-A hybrid decision-making approach—where global models are used as a reference but adapted based on local weightings—may be optimal in regions with moderate alignment (e.g., Cluster 3).
 
 See an example here: 
 842 Frankford. in Cluster 4
-Ranked 45 in Global
-Ranked 4.35 in Local
+Ranked 529 in Global
+Ranked 24 in Local
 This is located at the intersection of Tacony Creek Park and Junita Park, close to Adams Ave. There is a shopping mall with big parking lots. 
-
-```{r sankey, fig.height=14, fig.width=14}
-
-# sankey diagram
-# Categorize percentiles into rank groups
-
-TOPSIS_c4_cp %>%
-  mutate(
-    global_avg_rank = cut(avg_percentile, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
-    global_topsis_rank = cut(topsis_percentile, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
-    local_global_weight_rank = cut(topsis_percentile_c4, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
-    local_local_weight_rank = cut(topsis_percentile_c4_org, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%"))
-  ) %>%
-  dplyr::count(global_avg_rank, global_topsis_rank, local_global_weight_rank, local_local_weight_rank) %>% 
-  ggplot(., aes(axis1 = global_avg_rank, 
-                      axis2 = global_topsis_rank,
-                      axis3 = local_global_weight_rank, 
-                      axis4 = local_local_weight_rank, 
-                      y = n)) +
-  scale_x_discrete(limits = c("Global AVG", "Global TOPSIS", "Local TOPSIS (Global Weights)", "Local TOPSIS (Local Weights)"), 
-                   expand = c(.05, .5)) +
-  geom_alluvium(aes(fill = global_avg_rank), alpha = 0.8) +  # Fill based on initial ranking
-  geom_stratum(color = "grey") + 
-  geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 4) + 
-  scale_fill_manual(values = custom_palette) +
-  theme_minimal() +
-  labs(title = "Rank Transitions Between Global and Local TOPSIS Methods",
-       x = "Ranking Method", y = "Grid Count")
-
-```
-
-
-**We need to develop a way to compute for example how many grids in a cluster were ranked below top 20% in global MCDA but were not in the top 20% in local MCDA. We want to see the size of the effect from global to local.**
 
 Average global rank in cluster 1 is 228
 Average global rank in cluster 2 is 666
 Average global rank in cluster 3 is 744
 Average global rank in cluster 4 is 694
 
-```{r}
-cluster4 %>% 
-  left_join(TOPSIS, by = "uniqueID") %>%
-  dplyr::select(uniqueID, topsis_rank) %>%
-  summarise(mean_rank = mean(topsis_rank))
-```
-
-
-In Cluster 1, 165 out of 246 grids were in the top 20% in global model.
+In Cluster 1, 165 out of 246 grids were in the top 20% in global model. 
 In Cluster 2, 25 out of 190 grids were in the top 20% in global model.
 In Cluster 3, 28 out of 269 grids were in the top 20% in global model. 
-In Cluster 4, 25 out of 507 grids were in the top 20% in global model.
+In Cluster 4, 25 out of 507 grids were in the top 20% in global model. 
 
-In Cluster 1, there were 9 out of 246 grids ranked not in the top 20% in the global model but were in the top 20% in the local model.
-In Cluster 2, there were 18 out of 190 grids ranked not in the top 20% in the global model but were in the top 20% in the local model.
-In Cluster 3, there were 30 out of 269 grids ranked not in the top 20% in the global model but were in the top 20% in the local model.
-In Cluster 4, there were 85 out of 507 grids ranked not in the top 20% in the global model but were in the top 20% in the local model. 
+In Cluster 4, there were 219 out of 507 grids ranked not in the top 20% in the global model but were in the top 20% in the local model. 
 
 Using local MCDA, we will mostly capture the original top20% in cluster 1. But more importantly, a lot of areas in cluster 4 that were originally neglected for their low rank will now be given more attention. 
 
 ```{r}
 
-TOPSIS_c4_cp %>%
+global_local%>%
+  mutate(global_percentile = percent_rank(global_rank),
+         local_percentile = percent_rank(local_rank),
+         local_org_percentile = percent_rank(local_rank_org)) %>%
   mutate(
-    global_avg_rank = cut(avg_percentile, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
-    global_topsis_rank = cut(topsis_percentile, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
-    local_global_weight_rank = cut(topsis_percentile_c4, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
-    local_local_weight_rank = cut(topsis_percentile_c4_org, breaks = c(-1, 20, 40, 60, 80, 101), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%"))
+    global_cat = cut(global_percentile, breaks = c(-1, 0.2, 0.4, 0.6, 0.8, 1.1), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
+    local_cat = cut(local_percentile, breaks = c(-1, 0.2, 0.4, 0.6, 0.8, 1.1), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%")),
+    local_org_cat = cut(local_org_percentile, breaks = c(-1, 0.2, 0.4, 0.6, 0.8, 1.1), labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%"))
   ) %>% 
-  filter(global_topsis_rank == "0-20%")
- # filter(global_topsis_rank != "0-20%" & local_local_weight_rank == "0-20%")
+  filter(cluster == "1") %>%
+  filter(global_cat == "0-20%")
+  # filter(global_cat == "0-20%" & local_cat != "0-20%")
 ```
-
-
-
-
 
 When running global MCDA, every grid competes against all grids. When running Cluster specific MCDA, grids only compete within their cluster, causing a redistribution of relative rankings A grid that was middle-rank globally may appear much worse locally if it no longer competes with weaker grids outside its cluster. In other words, in the global model, these ideal/worst solutions are calculated from all grids, meaning that certain grids may appear closer to the ideal simply because they are better than the worst performers globally. Also in the global model, percentile rankings are spread across all grids, whereas in Cluster 1, only a subset of grids exist.If a grid was ranked 60% globally but now competes against only the densest, highest-priority locations, it might drop into a much lower percentile
 
@@ -2017,8 +1900,6 @@ Rank reversal highlights the influence of localized criteria adjustment, where g
 That said, local MCDA helps to avoid Over-Investment in already well-served areas. If only global MCDA were used, policymakers might favor areas that already rank high globally, potentially reinforcing existing disparities.Local MCDA allows a more targeted, equity-focused approach, ensuring that EVSE expansion reaches areas with high demand but lower current accessibility.For example, in cluster 4. global MCDA might rank some grids lower due to low current EV ownership, even though they urgently need better accessibility. Local MCDA increases the weight of EVSE accessibility and population density, ensuring these areas are prioritized for investment.
 
 Therefore, we should take a multi-scale approach (global + local) . This ensures that investments in EVSE infrastructure align with both system-wide efficiency and local equity goals. Global MCDA determines which neighborhoods or districts should receive EVSE investment. Local MCDA ensures that within those neighborhoods, resources are allocated to grids that need it the most, rather than just reinforcing existing infrastructure.
-
-**Decision-makers need to engage with local stakeholders when applying global models to ensure policies remain relevant. If policies are based on global TOPSIS rankings alone, they may overlook specific local priorities, leading to ineffective or misaligned interventions.**
 
 
 # Public Private Partnership
